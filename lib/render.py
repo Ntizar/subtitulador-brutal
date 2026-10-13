@@ -36,9 +36,13 @@ def quemar(video: str, ass: str, salida: str, crf: int = 20, preset: str = "very
            audio: str = "aac", avisar=None) -> str:
     """Quema los subtítulos dentro del vídeo. libass necesita FONTCONFIG_FILE,
     y el filtro ass= se lanza con el cwd en la carpeta del .ass para que las
-    rutas con espacios o dos puntos no rompan el filtro."""
+    rutas con espacios o dos puntos no rompan el filtro.
+
+    Con MM_PROGRESO=1 va informando del avance REAL (ffmpeg lo manda por stdout):
+    es lo que permite una barra que no miente en la web."""
     ass = str(Path(ass).resolve())
     carpeta, fichero = os.path.split(ass)
+    salida_abs = str(Path(salida).resolve())
     cmd = [FFMPEG, "-y", "-hide_banner", "-loglevel", "error", "-stats",
            "-i", str(Path(video).resolve()),
            "-vf", f"ass={fichero}",
@@ -48,7 +52,20 @@ def quemar(video: str, ass: str, salida: str, crf: int = 20, preset: str = "very
         cmd += ["-c:a", "copy"]
     else:
         cmd += ["-c:a", "aac", "-b:a", "160k"]
-    cmd += [str(Path(salida).resolve())]
+    seguir = bool(os.environ.get("MM_PROGRESO"))
+    if seguir:
+        cmd += ["-progress", "pipe:1"]      # antes del fichero de salida, no después
+    cmd += [salida_abs]
+    if seguir:
+        p = subprocess.Popen(cmd, cwd=carpeta, env=entorno(), text=True, bufsize=1,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for linea in p.stdout:
+            if linea.startswith(("out_time_ms=", "out_time_us=", "progress=")):
+                print("PROGRESO " + linea.strip(), flush=True)
+        error = p.stderr.read()
+        if p.wait() != 0:
+            raise RuntimeError("falló la quema con ffmpeg:\n" + (error or "")[-2000:])
+        return salida
     p = subprocess.run(cmd, cwd=carpeta, capture_output=True, text=True, env=entorno())
     if p.returncode != 0:
         raise RuntimeError("falló la quema con ffmpeg:\n" + (p.stderr or "")[-2000:])

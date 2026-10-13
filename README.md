@@ -31,6 +31,8 @@ un minuto.
 | Ajustar el reparto de tiempos | `lib/tarjetas.py` (`tiempos_de_bloque`, duración mínima) |
 | Cambiar cómo se quema o se exporta | `lib/render.py` |
 | Añadir una opción de línea de órdenes | `subtitular.py` |
+| La herramienta web (subir → elegir → descargar) | `servidor.py`, `app.js` e `index.html` |
+| El dibujo de las miniaturas de estilo | `vista.js` |
 | Cambiar las comprobaciones | `arnes.py` |
 | Bajar ffmpeg y las fuentes | `herramientas/instalar.sh` |
 | El vídeo de prueba con voz sintética | `pruebas/hacer_video.sh` y `pruebas/voz_prueba.sh` |
@@ -60,6 +62,7 @@ La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la in
 |---|---|
 | `--estilo` | Cuál de los 8 estilos |
 | `--desde-json` | Reutiliza una transcripción ya hecha: cambia de estilo sin volver a llamar a la API |
+| `--rehacer` | Ignora la transcripción guardada y la vuelve a hacer |
 | `--solo-ass` | No recodifica: escribe `.ass`, `.srt` y `.json` |
 | `--posicion`, `--escala`, `--mayusculas` | Colocación y tamaño |
 | `--limite` | Procesa solo los primeros N segundos (pruebas) |
@@ -69,6 +72,30 @@ La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la in
 Cada ejecución deja cuatro ficheros: el vídeo subtitulado, el `.ass` (editable), el `.srt`
 (para cualquier editor) y un `.json` con los tiempos **de cada palabra**, que es el
 contrato que consume el previsualizador.
+
+Y **no se paga dos veces la misma transcripción**: el motor guarda cada transcripción con una
+huella del vídeo (tamaño + primeros y últimos megabytes) y la reaprovecha mientras no cambies
+nada que afecte al texto. Pasar por los 8 estilos cuesta una transcripción, no ocho; eso se
+midió: 22,9 s la primera y 0 llamadas a la API las otras siete.
+
+## La herramienta web: subir el vídeo, elegir estilo y descargarlo
+
+`python3 servidor.py` levanta la herramienta en `http://127.0.0.1:8765`: se arrastra el vídeo
+(o se toca para elegirlo en el móvil), se elige uno de los 8 estilos viendo su miniatura, se
+pide **un fotograma real del propio vídeo** con ese estilo para confirmar antes de gastar
+proceso, y se descarga el resultado. El trabajo pesado lo hace esta máquina, no el navegador:
+la página solo habla con el motor y va contando por dónde va.
+
+- **Un trabajo a la vez.** 1 vCPU: quien llegue mientras se trabaja espera en cola, y se dice.
+- **La barra no miente.** El avance sale del `-progress` de ffmpeg (minuto real de quema), no
+  de una estimación.
+- **Nada sale de la máquina.** El vídeo se sube a una carpeta propia (`trabajos/`) y la clave
+  de la API nunca llega al navegador. Los trabajos se borran solos a las 24 horas.
+- **Con `--host 0.0.0.0`** se abre además al móvil de casa.
+
+`index.html` **es la misma página** que se publica en GitHub Pages
+(https://ntizar.github.io/subtitulador-brutal/): ahí no hay motor detrás, así que lo detecta,
+lo dice claramente y deja los 8 estilos para mirarlos. No finge que funciona.
 
 ## Previsualizador
 

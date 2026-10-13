@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="es" data-nz-theme="dark">
+<html lang="es" data-nz-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Subtitulador Brutal — elige tu estilo</title>
-<meta name="description" content="Previsualizador de los 8 estilos de subtítulo del Subtitulador Brutal: subtítulos animados quemados con whisper + qwen3.6 de la API de NaN y libass.">
+<title>Subtitulador Brutal — sube el vídeo, elige estilo, descarga</title>
+<meta name="description" content="Sube un vídeo, elige uno de los 8 estilos y descárgalo subtitulado palabra a palabra.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/tokens.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/packs/p1-layout.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/packs/p2-navigation.css">
@@ -13,418 +13,186 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/packs/p5-forms.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/packs/p6-feedback.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/packs/p8-data.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Ntizar/Aurora@v8.4.2/packs/p9-media.css">
 <style>
-/* Las fuentes de los estilos van AUTO-ALOJADAS (nada de CDN de fuentes, regla de
-   Aurora). Son las mismas que usa libass en el render final. */
-@font-face{font-family:"Inter";src:url("fuentes/Inter.ttf") format("truetype");font-display:swap}
-@font-face{font-family:"Archivo Black";src:url("fuentes/ArchivoBlack.ttf") format("truetype");font-display:swap}
-@font-face{font-family:"Anton";src:url("fuentes/Anton.ttf") format("truetype");font-display:swap}
-@font-face{font-family:"Bebas Neue";src:url("fuentes/BebasNeue.ttf") format("truetype");font-display:swap}
-@font-face{font-family:"Montserrat";src:url("fuentes/Montserrat.ttf") format("truetype");font-display:swap}
-@font-face{font-family:"Space Grotesk";src:url("fuentes/SpaceGrotesk.ttf") format("truetype");font-display:swap}
-@font-face{font-family:"Archivo";src:url("fuentes/Archivo.ttf") format("truetype");font-display:swap}
+/* Las fuentes de los 8 estilos van AUTO-ALOJADAS (regla del proyecto: nada de CDN
+   de fuentes). Son las mismas que usa el render de libass, así que el dibujo de la
+   miniatura y el vídeo final coinciden. */
+@font-face{font-family:Inter;src:url(fuentes/Inter.ttf) format("truetype");font-display:swap}
+@font-face{font-family:"Archivo";src:url(fuentes/Archivo.ttf) format("truetype");font-display:swap}
+@font-face{font-family:"Archivo Black";src:url(fuentes/ArchivoBlack.ttf) format("truetype");font-display:swap}
+@font-face{font-family:Anton;src:url(fuentes/Anton.ttf) format("truetype");font-display:swap}
+@font-face{font-family:Montserrat;src:url(fuentes/Montserrat.ttf) format("truetype");font-display:swap}
+@font-face{font-family:"Bebas Neue";src:url(fuentes/BebasNeue.ttf) format("truetype");font-display:swap}
+@font-face{font-family:"Space Grotesk";src:url(fuentes/SpaceGrotesk.ttf) format("truetype");font-display:swap}
+@font-face{font-family:Outfit;src:url(fuentes/Outfit.ttf) format("truetype");font-display:swap}
+@font-face{font-family:"Noto Sans";src:url(fuentes/NotoSans.ttf) format("truetype");font-display:swap}
 
-/* Geometría de la escena (con tokens del sistema, nada a mano) */
-.escena{position:relative;background:var(--nz-bg-inset);border-radius:var(--nz-radius-lg);
-  overflow:hidden;display:flex;justify-content:center;align-items:center;min-height:24rem}
-.escena canvas{max-width:100%;max-height:70vh;display:block}
-.marco-movil{width:min(340px,86vw)}
-.tira{display:grid;gap:var(--nz-space-3);grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr))}
-.mini{border:var(--nz-border-w) solid var(--nz-border);border-radius:var(--nz-radius-md);
-  padding:var(--nz-space-2);background:var(--nz-surface);cursor:pointer;min-height:44px;
-  font:inherit;color:var(--nz-text);text-align:center}
-.mini[aria-pressed="true"]{border-color:var(--nz-accent);box-shadow:var(--nz-shadow-accent)}
-.mini canvas{width:100%;height:auto;border-radius:var(--nz-radius-xs);display:block}
-.mini span{display:block;margin-top:var(--nz-space-1);font-size:var(--nz-text-2xs);color:var(--nz-text-mute)}
-.rejilla{display:grid;gap:var(--nz-space-5);grid-template-columns:1fr}
-@media (min-width:960px){.rejilla{grid-template-columns:1.1fr .9fr}}
-.mando{display:flex;gap:var(--nz-space-3);align-items:center;flex-wrap:wrap}
-.aviso{font-size:var(--nz-text-2xs);color:var(--nz-text-mute)}
+/* Capa propia del consumidor: prefijo sb-, solo geometría y estados. Nada de
+   colores ni sombras a mano: todo son tokens del sistema. */
+.sb-mini{width:100%;height:auto;display:block;background:var(--nz-bg-inset);
+  border-radius:var(--nz-radius-md)}
+.sb-marco{display:grid;gap:var(--nz-space-4);
+  grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr))}
+.sb-pieza{display:grid;gap:var(--nz-space-2);padding:var(--nz-space-3);
+  border:var(--nz-border-w) solid var(--nz-border);border-radius:var(--nz-radius-lg);
+  background:var(--nz-surface);cursor:pointer;text-align:left}
+.sb-pieza.is-active{border-color:var(--nz-accent);box-shadow:var(--nz-shadow-md)}
+.sb-pieza.is-active .sb-nombre{color:var(--nz-accent-strong)}
+.sb-nombre{font-weight:var(--nz-peso-fuerte);font-size:var(--nz-text-md)}
+.sb-lienzo{width:100%;height:auto;display:block;background:var(--nz-bg-inset);
+  border-radius:var(--nz-radius-md)}
+.sb-registro{white-space:pre-wrap;font-size:var(--nz-text-2xs);max-height:12rem;
+  overflow:auto;background:var(--nz-bg-soft);border-radius:var(--nz-radius-sm);
+  padding:var(--nz-space-3);margin:0}
+.sb-acciones{display:flex;flex-wrap:wrap;gap:var(--nz-space-3);align-items:center}
 </style>
 </head>
 <body class="nz">
 
-<header class="nz-navbar">
-  <div class="nz-navbar__brand">
-    <strong class="nz-lbl nz-lbl--accent">Subtitulador Brutal</strong>
-    <span class="nz-text-soft">8 estilos animados, whisper + qwen3.6 de NaN y libass</span>
-  </div>
-  <nav class="nz-navbar__links" aria-label="Enlaces">
-    <a class="nz-btn nz-btn--ghost nz-btn--sm" href="#como">Cómo se usa</a>
-    <a class="nz-btn nz-btn--ghost nz-btn--sm" href="https://github.com/Ntizar/subtitulador-brutal">Repositorio</a>
+<header class="nz-navbar nz-navbar--bordered">
+  <span class="nz-navbar__brand">Subtitulador Brutal <span class="nz-badge nz-badge--accent" id="modo">local</span></span>
+  <nav class="nz-navbar__links">
+    <a class="nz-navbar__link" href="#subir">1 · El vídeo</a>
+    <a class="nz-navbar__link" href="#estilo">2 · El estilo</a>
+    <a class="nz-navbar__link" href="#listo">3 · Descargar</a>
   </nav>
 </header>
 
-<main class="nz-container nz-container--app">
+<main class="nz-container nz-container--app nz-stack nz-stack--lg">
 
-  <section class="nz-article" aria-labelledby="t">
-    <h1 class="nz-h1" id="t">Elige el estilo y míralo en movimiento</h1>
-    <p class="nz-lead">Esta página reproduce, en el navegador, la misma animación palabra a palabra que
-      luego quema <span class="nz-code nz-code--inline">ffmpeg</span> con libass. Carga la transcripción
-      que genera el CLI y ves tu propio vídeo antes de gastar un minuto de proceso.</p>
-    <div class="nz-alert nz-alert--info">
-      <span>La previsualización es fiel en color, tipografía, contorno y ritmo, pero es una
-      <strong>aproximación dibujada en canvas</strong>. El render definitivo lo hace libass: ahí
-      los degradados del barrido y las sutilezas de \t se ven exactos.</span>
-    </div>
+  <section class="nz-hero-bleed nz-hero-bleed--compact nz-stack">
+    <h1 class="nz-h1">Sube el vídeo, elige estilo y descárgalo subtitulado</h1>
+    <p class="nz-lead">Sirve cualquier duración: de un clip de 10 segundos a una charla de una
+      hora. Los subtítulos se queman con la voz real del vídeo (transcripción y maquetación
+      palabra a palabra) y cada ejecución deja además el <strong>.ass</strong> y el
+      <strong>.srt</strong> por si quieres retocarlos en un editor.</p>
   </section>
 
-  <div class="rejilla">
-    <section class="nz-article" aria-labelledby="tp">
-      <h2 class="nz-h2" id="tp">Escena</h2>
-      <div class="escena">
-        <div class="marco-movil"><canvas id="lienzo" width="1080" height="1920" aria-label="Previsualización del subtítulo"></canvas></div>
-      </div>
-      <div class="mando" style="margin-top:var(--nz-space-4)">
-        <button class="nz-btn nz-btn--primary" id="reproducir" type="button">Reproducir</button>
-        <label class="nz-field" style="flex:1;min-width:12rem">
-          <span class="nz-field__label">Momento</span>
-          <input class="nz-input" id="barra" type="range" min="0" max="1000" value="0" aria-label="Momento del vídeo">
-        </label>
-        <span class="nz-badge nz-badge--neutral" id="reloj">0,0 s</span>
-      </div>
-      <div class="mando" style="margin-top:var(--nz-space-3)">
-        <label class="nz-field" style="flex:1;min-width:14rem">
-          <span class="nz-field__label">Tu transcripción (.json del CLI)</span>
-          <input class="nz-input" type="file" id="fichaje" accept=".json,application/json">
-        </label>
-        <label class="nz-field" style="flex:1;min-width:14rem">
-          <span class="nz-field__label">O tu vídeo (se ve de fondo, no se sube a ningún sitio)</span>
-          <input class="nz-input" type="file" id="fichavideo" accept="video/*">
-        </label>
-      </div>
-      <p class="aviso" id="estado">Usando la transcripción de ejemplo (12 tarjetas).</p>
-    </section>
-
-    <aside class="nz-article" aria-labelledby="te">
-      <h2 class="nz-h2" id="te">Estilo</h2>
-      <div class="tira" id="tira" role="group" aria-label="Estilos de subtítulo"></div>
-
-      <h3 class="nz-h3" style="margin-top:var(--nz-space-6)">Colocación</h3>
-      <div class="nz-segmented nz-segmented--brand" id="posicion" role="group" aria-label="Colocación">
-        <button type="button" aria-selected="true" data-pos="bajo">Bajo</button>
-        <button type="button" aria-selected="false" data-pos="medio">Medio</button>
-        <button type="button" aria-selected="false" data-pos="alto">Alto</button>
-      </div>
-
-      <h3 class="nz-h3" style="margin-top:var(--nz-space-6)">Tamaño</h3>
-      <label class="nz-field">
-        <span class="nz-field__label">Escala del texto (<span id="escalav">1,00</span>×)</span>
-        <input class="nz-input" id="escala" type="range" min="70" max="140" value="100" aria-label="Escala del texto">
-      </label>
-      <label class="nz-switch" style="margin-top:var(--nz-space-4)">
-        <input type="checkbox" id="mayus">
-        <span class="nz-switch__track"><span class="nz-switch__thumb"></span></span>
-        <span class="nz-switch__label">Forzar mayúsculas</span>
-      </label>
-
-      <h3 class="nz-h3" style="margin-top:var(--nz-space-6)">Orden lista para pegar</h3>
-      <pre class="nz-code nz-code--block" id="orden">python3 subtitular.py tu_video.mp4 --estilo aurora7</pre>
-      <button class="nz-btn nz-btn--outline nz-btn--sm" id="copiar" type="button">Copiar orden</button>
-      <p class="aviso" id="copiado" role="status" aria-live="polite"></p>
-      <p class="aviso">Tu vídeo de ejemplo en la escena es un fondo simulado. En la escena real
-      influyen el encuadre y el color del metraje: por eso se prueba con el vídeo delante.</p>
-    </aside>
+  <div class="nz-alert nz-alert--info" id="aviso-motor" hidden>
+    <p><strong>Estás viendo la página sin motor.</strong> Los 8 estilos se pueden mirar, pero
+      para subtitular de verdad hace falta arrancar el servidor en tu máquina:</p>
+    <p class="nz-text--small">En la carpeta del proyecto: <code>python3 servidor.py</code> y abre
+      <code>http://127.0.0.1:8765</code>. Todo el trabajo ocurre ahí: el vídeo no sale de tu
+      ordenador y la clave de la API nunca llega al navegador.</p>
   </div>
 
-  <section class="nz-article" id="como" aria-labelledby="tc">
-    <h2 class="nz-h2" id="tc">Cómo se usa</h2>
-    <div class="nz-bento">
-      <div>
-        <h3 class="nz-h3">1 · Prepara</h3>
-        <pre class="nz-code nz-code--block">bash herramientas/instalar.sh</pre>
-        <p class="aviso">Baja ffmpeg estático (con libass) y las fuentes. Sin root.</p>
+  <section id="subir" class="nz-stack">
+    <h2 class="nz-h2">1 · El vídeo</h2>
+    <div class="nz-filezona" id="zona">
+      <span class="nz-filezona__icono">⬆</span>
+      <span class="nz-filezona__texto">Arrastra el vídeo aquí o toca para elegirlo</span>
+      <span class="nz-field__help">MP4, MOV, WEBM, MKV · hasta 3 GB · no sale de tu máquina</span>
+      <input class="nz-filezona__input" id="fichero" type="file" accept="video/*" aria-label="Subir el vídeo">
+    </div>
+    <div id="ficha" hidden class="nz-stack">
+      <div class="nz-dash-grid">
+        <div class="nz-kpi nz-kpi--sm"><span class="nz-kpi__label">Fichero</span><span class="nz-kpi__value" id="f-nombre">—</span></div>
+        <div class="nz-kpi nz-kpi--sm"><span class="nz-kpi__label">Duración</span><span class="nz-kpi__value" id="f-duracion">—</span></div>
+        <div class="nz-kpi nz-kpi--sm"><span class="nz-kpi__label">Tamaño</span><span class="nz-kpi__value" id="f-tamano">—</span></div>
+        <div class="nz-kpi nz-kpi--sm"><span class="nz-kpi__label">Resolución</span><span class="nz-kpi__value" id="f-resolucion">—</span></div>
       </div>
-      <div>
-        <h3 class="nz-h3">2 · Subtitula</h3>
-        <pre class="nz-code nz-code--block">python3 subtitular.py video.mp4 --estilo bestia</pre>
-        <p class="aviso">Vídeo, .ass, .srt y .json con los tiempos de cada palabra.</p>
-      </div>
-      <div>
-        <h3 class="nz-h3">3 · Cambia de estilo gratis</h3>
-        <pre class="nz-code nz-code--block">python3 subtitular.py video.mp4 --estilo neon \
-  --desde-json salidas/video.bestia.json --solo-ass</pre>
-        <p class="aviso">Reutiliza la transcripción: no vuelve a llamar a la API.</p>
-      </div>
-      <div>
-        <h3 class="nz-h3">Medido de verdad</h3>
-        <div class="nz-bento">
-          <div class="nz-kpi nz-kpi--sm"><span class="nz-kpi__label">Quema 1080×1920 de 59 s</span><span class="nz-kpi__value">38 s</span></div>
-          <div class="nz-kpi nz-kpi--sm"><span class="nz-kpi__label">Transcripción (13 frases)</span><span class="nz-kpi__value">9 s</span></div>
-          <div class="nz-kpi nz-kpi--accent nz-kpi--sm"><span class="nz-kpi__label">Un vídeo de 10 min</span><span class="nz-kpi__value">≈6,5 min</span></div>
-        </div>
-      </div>
+      <p class="nz-field__help" id="f-estimacion"></p>
     </div>
   </section>
+
+  <section id="estilo" class="nz-stack">
+    <h2 class="nz-h2">2 · El estilo</h2>
+    <p class="nz-text--muted">Las miniaturas están dibujadas con el mismo motor que el vídeo
+      final (mismos colores, letra y animación), pero son una aproximación: el canvas no
+      tiene karaoke ni las transiciones del render. Cuando subas tu vídeo podrás pedir
+      <strong>un fotograma real tuyo</strong> con el estilo elegido.</p>
+    <div class="sb-marco" id="marco" role="radiogroup" aria-label="Estilo de subtítulo"></div>
+
+    <div class="nz-split">
+      <div class="nz-field">
+        <span class="nz-field__label">Dónde van</span>
+        <div class="nz-segmented nz-segmented--brand" id="posicion" role="group" aria-label="Colocación">
+          <button type="button" aria-selected="true" data-pos="bajo">Abajo</button>
+          <button type="button" aria-selected="false" data-pos="medio">En medio</button>
+          <button type="button" aria-selected="false" data-pos="alto">Arriba</button>
+        </div>
+        <span class="nz-field__help">Abajo es lo normal; en medio o arriba si el vídeo tiene
+          algo importante en la parte de abajo.</span>
+      </div>
+      <div class="nz-field">
+        <span class="nz-field__label">Letra</span>
+        <label class="nz-switch nz-switch--brand">
+          <input type="checkbox" id="mayus">
+          <span class="nz-switch__track"><span class="nz-switch__thumb"></span></span>
+          <span class="nz-switch__label">Todo en mayúsculas</span>
+        </label>
+        <span class="nz-field__help">Los estilos tipo influencer ya salen en mayúsculas solos.</span>
+      </div>
+    </div>
+
+    <div class="sb-acciones">
+      <button type="button" class="nz-btn nz-btn--ghost" id="btn-muestra" disabled>
+        Ver un fotograma de mi vídeo</button>
+      <span class="nz-text--small nz-text--muted" id="nota-muestra"></span>
+    </div>
+    <figure id="caja-muestra" hidden class="nz-stack" style="margin:0">
+      <img class="sb-lienzo" id="muestra" alt="Fotograma de tu vídeo con los subtítulos puestos">
+      <figcaption class="nz-field__help" id="pie-muestra"></figcaption>
+    </figure>
+  </section>
+
+  <section id="listo" class="nz-stack">
+    <h2 class="nz-h2">3 · El vídeo subtitulado</h2>
+    <div class="sb-acciones">
+      <button type="button" class="nz-btn nz-btn--primary nz-btn--lg" id="btn-subtitular" disabled>
+        Subtitular</button>
+      <span class="nz-text--small nz-text--muted" id="nota-boton">Primero sube un vídeo.</span>
+    </div>
+
+    <div id="caja-progreso" hidden class="nz-stack">
+      <div class="nz-progress nz-progress--accent nz-progress--with-label">
+        <div class="nz-progress__bar" id="barra" style="width:0%"></div>
+      </div>
+      <p class="nz-lead" id="fase">Preparando…</p>
+      <p class="nz-field__help" id="detalle-tiempo"></p>
+      <details>
+        <summary class="nz-text--small">Ver el detalle del motor</summary>
+        <pre class="sb-registro" id="registro"></pre>
+      </details>
+    </div>
+
+    <div id="caja-resultado" hidden class="nz-split">
+      <video class="nz-video nz-video--full" id="reproductor" controls playsinline></video>
+      <div class="nz-stack">
+        <h3 class="nz-h3">Ya está</h3>
+        <p class="nz-text--muted" id="resumen"></p>
+        <a class="nz-btn nz-btn--primary nz-btn--block" id="descargar" href="#" download>Descargar el vídeo</a>
+        <a class="nz-btn nz-btn--ghost nz-btn--block" id="descargar-srt" href="#" download>Descargar el .srt</a>
+        <p class="nz-field__help">Los trabajos se borran solos a las 24 horas. Si quieres otro
+          estilo, cambia el estilo arriba y vuelve a darle: la transcripción se reaprovecha y
+          no se vuelve a pagar.</p>
+      </div>
+    </div>
+
+    <div class="nz-alert nz-alert--danger" id="caja-error" hidden>
+      <p><strong>No he podido terminar.</strong></p>
+      <p class="nz-text--small" id="texto-error"></p>
+    </div>
+  </section>
+
 </main>
 
-<footer class="nz-footer">
-  <span>Hecho con ❤️ por David Antizar</span>
+<footer class="nz-container">
+  <p class="nz-text--small nz-text--muted">Hecho con ❤️ por David Antizar</p>
 </footer>
 
 <script>
-"use strict";
-/* ───────── estilos: mismos parámetros que lib/estilos.py ───────── */
-const ESTILOS = {
-  aurora7:{nombre:"Aurora 7",fuente:"Inter",escala:.058,mayus:false,color:"#FFFFFF",clave:"#22D3EE",
-    contorno:4,sombra:2,colorContorno:"#05070D",anim:"pop",pop:1.14,espaciado:1.2,
-    banda:{alto:.055,color:"#0B1220",alfa:118,filete:"#22D3EE",fileteAlto:.006}},
-  brutal:{nombre:"Brutal (Hormozi)",fuente:"Archivo Black",escala:.062,mayus:true,color:"#FFFFFF",
-    clave:"#FFE000",contorno:6,sombra:0,colorContorno:"#000000",anim:"pop",pop:1.22,espaciado:.8},
-  bestia:{nombre:"Bestia (MrBeast)",fuente:"Anton",escala:.066,mayus:true,color:"#FFFFFF",clave:"#00E5FF",
-    contorno:7,sombra:3,colorContorno:"#000000",colorSombra:"#00B8D4",sombraAlfa:100,anim:"pop",pop:1.18,espaciado:.5},
-  karaoke:{nombre:"Karaoke",fuente:"Montserrat",escala:.056,mayus:false,color:"#FFFFFF",clave:"#FF4D6D",
-    contorno:4,sombra:2,colorContorno:"#12040B",anim:"karaoke",espaciado:.6},
-  neon:{nombre:"Neón",fuente:"Bebas Neue",escala:.072,mayus:true,color:"#F5D0FE",clave:"#22D3EE",
-    contorno:3,sombra:0,colorContorno:"#7C3AED",colorSombra:"#A855F7",sombraAlfa:90,anim:"pop",pop:1.12,
-    espaciado:2,entradaFade:90},
-  editorial:{nombre:"Editorial",fuente:"Inter",escala:.046,mayus:false,color:"#F8FAFC",clave:"#FBBF24",
-    contorno:0,sombra:0,caja:true,cajaColor:"#000000",cajaAlfa:150,anim:"fade",fade:140,espaciado:.4},
-  maquina:{nombre:"Máquina de escribir",fuente:"Space Grotesk",escala:.05,mayus:false,color:"#E5E7EB",
-    clave:"#34D399",contorno:3,sombra:1,colorContorno:"#0A0F0D",anim:"maquina",espaciado:1},
-  vhs:{nombre:"VHS",fuente:"Archivo",escala:.058,mayus:true,color:"#FDE047",clave:"#FF2D55",
-    contorno:5,sombra:2,colorContorno:"#1B0030",colorSombra:"#22D3EE",sombraAlfa:120,anim:"glitch",espaciado:1.6}
-};
-const ORDEN = Object.keys(ESTILOS);
-
-/* ───────── transcripción de ejemplo (la genera el CLI) ───────── */
-const EJEMPLO = {
-  info:{ancho:1080,alto:1920,duracion:25.4},
-  tarjetas:[
-    ["Bienvenidos al canal.",0,1.30,"Bienvenidos"],
-    ["Hoy vamos a hablar",1.55,2.60,"hablar"],
-    ["de tres cosas que",2.62,3.60,"tres"],
-    ["cambian por completo",3.62,4.70,"cambian"],
-    ["tu forma de trabajar con vídeo.",4.72,6.60,"vídeo"],
-    ["Primero, la transcripción automática.",7.40,9.60,"transcripción"],
-    ["Detección de frases por silencios reales.",9.80,12.10,"silencios"],
-    ["Cada bloque cae donde acaba la voz.",12.30,14.40,"voz"],
-    ["Segundo, el diseño del subtítulo.",15.20,17.30,"diseño"],
-    ["Ocho estilos, y el que más te guste.",17.50,19.90,"guste"],
-    ["Tercero, la quema con libass.",20.70,22.80,"libass"],
-    ["Y listo. Así de simple.",23.00,25.00,"simple."]
-  ].map(([texto,inicio,fin,clave],i)=>({i,inicio,fin,texto,clave,palabras:repartir(texto,inicio,fin)}))
-};
-function repartir(texto,inicio,fin){
-  const ws=texto.split(/\s+/).filter(Boolean);
-  const pes=ws.map(w=>Math.max(w.length,5)), tot=pes.reduce((a,b)=>a+b,0);
-  let t=inicio; return ws.map((w,k)=>{const d=(fin-inicio)*pes[k]/tot;const p={w,a:t,b:t+d};t+=d;return p;});
-}
-
-/* ───────── estado ───────── */
-let estilo="aurora7", posicion="bajo", escala=1, mayus=null, datos=EJEMPLO, video=null;
-let t=0, sonando=false, t0=0, base=0;
-
-const lienzo=document.getElementById("lienzo"), ctxInicial=lienzo.getContext("2d");
-let ctx=ctxInicial;
-const $=id=>document.getElementById(id);
-
-/* ───────── dibujo ───────── */
-function fondo(W,H,tt){
-  const g=ctx.createLinearGradient(0,0,W,H);
-  g.addColorStop(0,"#0B1020"); g.addColorStop(.5,"#1E1B4B"); g.addColorStop(1,"#082F49");
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  // dos formas que se mueven, para que se note que hay "vídeo" detrás
-  ctx.save(); ctx.globalAlpha=.20; ctx.fillStyle="#22D3EE";
-  ctx.fillRect(W/2-180+Math.sin(tt/2)*130,H*0.36,360,H*0.27); ctx.restore();
-  ctx.save(); ctx.globalAlpha=.5; ctx.fillStyle="#FF7A1A";
-  ctx.fillRect(W/2-100,H*0.73,200,H*0.011); ctx.restore();
-}
-function fuente(est,px){ return `${px}px "${est.fuente}", "Noto Sans", sans-serif`; }
-
-function medir(est,px,texto,esp){
-  ctx.font=fuente(est,px);
-  let w=ctx.measureText(texto).width;
-  if(esp){ w += esp*(texto.length-1); }
-  return w;
-}
-function pintaPalabra(w,x,y,est,px,color,esp){
-  ctx.font=fuente(est,px);
-  ctx.textAlign="left";
-  if(est.caja){
-    const a=(est.cajaAlfa??150)/255;
-    ctx.save(); ctx.globalAlpha=1-a; ctx.fillStyle=est.cajaColor;
-    ctx.fillRect(x-14,y-px*0.92,w+28,px*1.34); ctx.restore();
-  }
-  if(est.contorno>0){
-    ctx.lineJoin="round"; ctx.lineWidth=est.contorno*(px/72); ctx.strokeStyle=est.colorContorno;
-    if(est.colorSombra && est.sombra){ ctx.save(); ctx.globalAlpha=1-(est.sombraAlfa??0)/255;
-      ctx.strokeStyle=est.colorSombra; ctx.save(); ctx.translate(0,px*0.06); ctx.strokeText(w,x,y); ctx.restore(); ctx.restore(); }
-    ctx.strokeText(w,x,y);
-  }
-  if(est.sombra && !est.colorSombra){ ctx.save(); ctx.globalAlpha=.55; ctx.fillStyle="#000";
-    ctx.fillText(w,x+px*0.05,y+px*0.05); ctx.restore(); }
-  ctx.fillStyle=color; ctx.fillText(w,x,y);
-  return x + w + (esp||0);
-}
-function tarjetaEn(tt){ return datos.tarjetas.find(c=>tt>=c.inicio && tt<=c.fin); }
-
-function dibujar(tt,W,H,destino){
-  const est=ESTILOS[estilo]; ctx=destino;
-  ctx.clearRect(0,0,W,H);
-  if(video && video.readyState>=2){ ctx.drawImage(video,0,0,W,H); } else { fondo(W,H,tt); }
-
-  const card=tarjetaEn(tt); if(!card) return;
-  const fsBase=Math.round(H*est.escala*escala);
-  const util=W*0.88;
-  const usaMayus = (mayus===null) ? est.mayus : mayus;
-  const palabras=card.palabras.map(p=>({w: usaMayus ? p.w.toUpperCase() : p.w,
-      a:p.a, b:p.b, orig:p.w}));
-  const frase=palabras.map(p=>p.w).join(" ");
-  let px=fsBase;
-  const esp=est.espaciado||0;
-  if(medir(est,px,frase,esp)>util) px=Math.max(12,Math.floor(px*util/medir(est,px,frase,esp)));
-
-  const margen=H*(posicion==="alto"?0.12:0.11);
-  let y = posicion==="alto" ? margen+px : (posicion==="medio" ? H/2+px/3 : H-margen);
-
-  // banda de Aurora 7
-  if(est.banda){
-    const ah=H*est.banda.alto, cy=(y+ (y-px*1.32))/2, by=cy-ah/2, bx=W*0.05, bw=W-2*bx;
-    ctx.save();
-    ctx.globalAlpha=1-est.banda.alfa/255; ctx.fillStyle=est.banda.color;
-    ctx.fillRect(bx,by,bw,ah);
-    ctx.globalAlpha=1; ctx.fillStyle=est.banda.filete;
-    ctx.fillRect(bx,by-H*est.banda.fileteAlto,bw,H*est.banda.fileteAlto);
-    ctx.restore();
-  }
-  const anchoTotal=medir(est,px,frase,esp);
-  let x=W/2-anchoTotal/2;
-
-  if(est.anim==="karaoke"){
-    ctx.font=fuente(est,px); ctx.textAlign="left";
-    let xx=x;
-    palabras.forEach(p=>{
-      const cantado = tt>=p.b ? 1 : (tt<=p.a ? 0 : (tt-p.a)/(p.b-p.a));
-      const w=ctx.measureText(p.w).width;
-      // fondo del barrido: blanco; encima, en color, solo lo ya cantado
-      const col = cantado>0.5 ? est.clave : est.color;
-      xx=pintaPalabra(p.w,xx,y,est,px,col,esp);
-    });
-    return;
-  }
-  if(est.anim==="maquina"){
-    const idx=palabras.findIndex(p=>tt<p.b);
-    const vis=idx<0?palabras.length:idx+1;
-    palabras.slice(0,vis).forEach(p=>{ x=pintaPalabra(p.w,x,y,est,px,est.color,esp); });
-    ctx.font=fuente(est,px); ctx.fillStyle=est.clave;
-    if(Math.floor(tt*3)%2===0) ctx.fillText("|",x+2,y);
-    return;
-  }
-  if(est.anim==="fade"){
-    palabras.forEach(p=>{ x=pintaPalabra(p.w,x,y,est,px,est.color,esp); });
-    return;
-  }
-  // pop + glitch: la palabra activa se resalta y se agranda
-  palabras.forEach((p,k)=>{
-    const activo = tt>=p.a && (k+1>=palabras.length || tt<palabras[k+1].a);
-    const esClave = card.clave && p.orig.toLowerCase().replace(/[.,;:!?¡¿]/g,"")===
-                    card.clave.toLowerCase().replace(/[.,;:!?¡¿]/g,"");
-    if(activo && est.anim==="glitch"){
-      const desp=px*0.05;
-      ctx.save(); ctx.globalAlpha=.7; ctx.fillStyle="#FF2D55"; ctx.font=fuente(est,px); ctx.textAlign="left";
-      ctx.fillText(p.w,x-desp,y); ctx.fillStyle="#22D3EE"; ctx.fillText(p.w,x+desp,y); ctx.restore();
-    }
-    if(activo){
-      const ppx=px*est.pop*((esClave)?1.06:1);
-      const wAct=medir(est,ppx,p.w,esp);
-      const wNorm=medir(est,px,p.w,esp);
-      const dx=(wAct-wNorm)/2;
-      pintaPalabra(p.w,x-dx,y,est,ppx,est.clave,esp);
-      x += wNorm;
-    } else {
-      x=pintaPalabra(p.w,x,y,est,px,est.color,esp);
-    }
-  });
-}
-
-/* ───────── reproducción ───────── */
-function dur(){ return datos.info.duracion || (datos.tarjetas.at(-1).fin+0.4); }
-function pinta(){
-  const est=ESTILOS[estilo];
-  const vertical = datos.info.alto>=datos.info.ancho;
-  const W=vertical?1080:1920, H=vertical?1920:1080;
-  if(lienzo.width!==W||lienzo.height!==H){ lienzo.width=W; lienzo.height=H; }
-  dibujar(t,W,H,ctx);
-  $("reloj").textContent = t.toFixed(1).replace(".",",")+" s";
-  $("barra").value = Math.round(1000*t/dur());
-}
-function bucle(ts){
-  if(!sonando) return;
-  t = base + (performance.now()-t0)/1000;
-  if(video && video.readyState>=2){ t=video.currentTime; }
-  if(t>dur()){ t=0; base=0; t0=performance.now(); if(video) video.currentTime=0; }
-  pinta(); requestAnimationFrame(bucle);
-}
-function alternar(){
-  sonando=!sonando;
-  $("reproducir").textContent = sonando? "Pausa":"Reproducir";
-  if(sonando){ base=t; t0=performance.now(); if(video) video.play().catch(()=>{}); requestAnimationFrame(bucle); }
-  else if(video) video.pause();
-}
-
-/* ───────── inicialización ───────── */
-function miniaturas(){
-  const casa=$("tira");
-  ORDEN.forEach(k=>{
-    const b=document.createElement("button");
-    b.type="button"; b.className="mini"; b.setAttribute("aria-pressed",k===estilo?"true":"false");
-    b.dataset.k=k;
-    const c=document.createElement("canvas"); c.width=180; c.height=320;
-    const sp=document.createElement("span"); sp.textContent=ESTILOS[k].nombre;
-    b.append(c,sp); casa.append(b);
-    b.addEventListener("click",()=>{ estilo=k;
-      [...casa.children].forEach(n=>n.setAttribute("aria-pressed",n.dataset.k===k?"true":"false"));
-      ordenTexto(); pinta(); });
-    // miniatura con una tarjeta del ejemplo, congelada en su palabra clave
-    const guardadoCtx=ctx, guardadoDatos=datos, tmpEstilo=estilo;
-    ctx=c.getContext("2d"); datos=EJEMPLO; estilo=k;
-    const card=EJEMPLO.tarjetas[1];
-    fondo(180,320,card.inicio+.6);
-    dibujar((card.inicio+card.fin)/2,180,320,ctx);
-    estilo=tmpEstilo; datos=guardadoDatos; ctx=guardadoCtx;
-  });
-}
-function ordenTexto(){
-  const partes=[`python3 subtitular.py tu_video.mp4 --estilo ${estilo}`];
-  if(posicion!=="bajo") partes.push(`--posicion ${posicion}`);
-  if(mayus===true) partes.push("--mayusculas");
-  if(escala!==1) partes.push(`--escala ${(ESTILOS[estilo].escala*escala).toFixed(3)}`);
-  $("orden").textContent=partes.join(" ");
-}
-
-$("reproducir").addEventListener("click",alternar);
-$("barra").addEventListener("input",e=>{ t=dur()*e.target.value/1000;
-  if(video) video.currentTime=t; base=t; t0=performance.now(); pinta(); });
-$("posicion").addEventListener("click",e=>{ const b=e.target.closest("button[data-pos]"); if(!b)return;
-  posicion=b.dataset.pos;
-  [...e.currentTarget.children].forEach(n=>n.setAttribute("aria-selected", n===b?"true":"false"));
-  pinta(); });
-$("escala").addEventListener("input",e=>{ escala=e.target.value/100;
-  $("escalav").textContent=escala.toFixed(2).replace(".",","); pinta(); });
-$("mayus").addEventListener("change",e=>{ mayus=e.target.checked; pinta(); });
-$("copiar").addEventListener("click",async()=>{
-  try{ await navigator.clipboard.writeText($("orden").textContent); $("copiado").textContent="Orden copiada."; }
-  catch{ $("copiado").textContent="Copia a mano: el navegador no dejó usar el portapapeles."; } });
-$("fichaje").addEventListener("change",async e=>{
-  const f=e.target.files[0]; if(!f) return;
-  try{ const j=JSON.parse(await f.text());
-    if(!j.tarjetas || !j.tarjetas.length) throw new Error("sin tarjetas");
-    datos=j; t=0; $("estado").textContent=`Cargadas ${j.tarjetas.length} tarjetas de ${f.name}.`;
-  }catch(err){ $("estado").textContent="Ese JSON no sirve: "+err.message; }
-  pinta(); });
-$("fichavideo").addEventListener("change",e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const url=URL.createObjectURL(f); video=document.createElement("video");
-  video.src=url; video.muted=true; video.playsInline=true; video.preload="auto";
-  video.addEventListener("loadedmetadata",()=>{
-    datos.info.ancho=video.videoWidth; datos.info.alto=video.videoHeight;
-    datos.info.duracion=video.duration; lienzo.width=video.videoWidth; lienzo.height=video.videoHeight; pinta(); });
-  $("estado").textContent="Vídeo cargado en local (no sale de tu equipo)."; });
-
-document.addEventListener("keydown",e=>{ if(e.code==="Space" && e.target===document.body){ e.preventDefault(); alternar(); } });
-miniaturas(); ordenTexto(); pinta();
-window.addEventListener("resize",pinta);
+/* Diagnóstico a distancia: si algo revienta al cargar, se ve en el título de la
+   pestaña (y en un dump headless) sin abrir la consola a mano. */
+window.addEventListener("error", function (e) {
+  document.title = "ERROR " + (e.message || "desconocido") + " @ " + (e.filename || "?").split("/").pop() + ":" + e.lineno;
+});
+window.addEventListener("unhandledrejection", function (e) {
+  document.title = "PROMESA " + ((e.reason && e.reason.message) || e.reason || "?");
+});
 </script>
+<script src="vista.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

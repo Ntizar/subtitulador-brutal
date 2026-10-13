@@ -1,6 +1,6 @@
 """Subtitulador Brutal — utilidades compartidas."""
 from __future__ import annotations
-import os, re, subprocess, unicodedata
+import hashlib, os, re, subprocess, unicodedata
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -62,3 +62,20 @@ def normalizar(s: str) -> str:
 
 def palabras(s: str):
     return [w for w in normalizar(s).split() if w]
+
+def huella(ruta) -> str:
+    """Huella del vídeo: tamaño + primeros 4 MB + último 1 MB.
+
+    Identifica el material sin leerlo entero (un vídeo de una hora no se
+    recorre dos veces). Es la clave de la caché de transcripción: mismo
+    fichero + mismos ajustes = no se vuelve a pagar la API.
+    """
+    p = Path(ruta)
+    n = p.stat().st_size
+    h = hashlib.md5(str(n).encode())
+    with p.open("rb") as f:
+        h.update(f.read(4 * 1024 * 1024))
+        if n > 5 * 1024 * 1024:
+            f.seek(-1024 * 1024, 2)
+            h.update(f.read(1024 * 1024))
+    return h.hexdigest()[:12]

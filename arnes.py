@@ -12,7 +12,8 @@ No se fía de que "el comando terminó bien": comprueba el resultado.
                  (si no, el -ss está mal puesto y libass repinta el primero)
 
 Uso:
-  python arnes.py --video pruebas/video_prueba.mp4 --json salidas/x.json --estilos todos
+  python arnes.py --video pruebas/video_prueba.mp4 --estilos todos
+  python arnes.py --video v.mp4 --json salidas/v.aurora7.json --estilos aurora7
 """
 from __future__ import annotations
 import argparse, json, os, hashlib, re, subprocess, sys
@@ -187,31 +188,60 @@ def comprobar_render(cards, info, video, clave_estilo, carpeta):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--video", required=True)
-    ap.add_argument("--json", required=True, help="transcripción JSON ya generada")
+    ap.add_argument("--json", default=None,
+                    help="transcripción JSON; si se omite, se usa la de cada estilo "
+                         "(<carpeta>/<vídeo>.<estilo>.json), que es lo correcto")
     ap.add_argument("--estilos", default="aurora7")
     ap.add_argument("--carpeta", default=str(RAIZ / "salidas"))
     a = ap.parse_args()
     video = Path(a.video)
-    cards, info = TAR.cargar_json(a.json)
-    print(f"\n═══ ARNÉS SUBTITULADOR BRUTAL ═══\nvídeo: {video}\n"
-          f"json: {a.json} ({len(cards)} tarjetas)")
-    comprobar_estructura(cards, info)
+    carpeta = Path(a.carpeta)
+    compartido = Path(a.json).resolve() if a.json else None
     estilos = list(EST.ESTILOS) if a.estilos in ("todos", "all") else a.estilos.split(",")
-    tiras = []
+    print(f"\n═══ ARNÉS SUBTITULADOR BRUTAL ═══\nvídeo: {video}\n"
+          f"transcripción: {compartido.name if compartido else 'la de cada estilo'}")
+
+    # Cada .ass se comprueba contra el .json DEL QUE SALIÓ. Comprobar los 8 contra un
+    # único JSON es lo que hacía antes: cuando cada estilo se transcribía por su cuenta,
+    # el arnés acusaba tarjetas que faltaban cuando en realidad eran de otra transcripción.
+    cargados: dict[str, tuple] = {}
+
+    def datos(estilo):
+        for cand in (carpeta / f"{video.stem}.{estilo}.json", compartido):
+            if cand and Path(cand).exists():
+                k = str(Path(cand).resolve())
+                if k not in cargados:
+                    cargados[k] = TAR.cargar_json(k)
+                return (*cargados[k], Path(k))
+        no(f"[{estilo}] no hay transcripción que cuadre con su .ass "
+           f"(busco {video.stem}.{estilo}.json)")
+        return None, None, None
+
+    tiras, revisadas = [], set()
     for e in estilos:
         if e not in EST.ESTILOS:
             no(f"estilo desconocido: {e}"); continue
-        c_ass = str(Path(a.carpeta) / f"{video.stem}.{e}.ass")
-        c_srt = str(Path(a.carpeta) / f"{video.stem}.{e}.srt")
-        if Path(c_ass).exists():
-            print(f"\n2) COBERTURA [{e}]")
-            ass = Path(c_ass).read_text(encoding="utf-8")
-            srt = Path(c_srt).read_text(encoding="utf-8") if Path(c_srt).exists() else ""
-            faltan = [c.i for c in cards if normalizar(c.texto.split()[0]) not in normalizar(ass)]
-            no_ass = "❌" if faltan else "✅"
-            print(f"  {no_ass} {len(cards)-len(faltan)}/{len(cards)} tarjetas en el .ass")
-            if faltan: FALLOS.append(f"[{e}] faltan en el ass: {faltan[:5]}")
-        tiras.append(comprobar_render(cards, info, video, e, a.carpeta))
+        c_ass = carpeta / f"{video.stem}.{e}.ass"
+        if not c_ass.exists():
+            no(f"[{e}] no existe {c_ass.name}"); continue
+        cards, info, ruta_json = datos(e)
+        if cards is None:
+            continue
+        if compartido and ruta_json.resolve() != compartido:
+            AVISOS.append(f"[{e}] comprobado contra {ruta_json.name}, NO contra --json: "
+                          f"son transcripciones distintas")
+        k = str(ruta_json.resolve())
+        if k not in revisadas:             # la estructura, una vez por transcripción
+            revisadas.add(k)
+            print(f"\n── transcripción {ruta_json.name} ({len(cards)} tarjetas)")
+            comprobar_estructura(cards, info)
+        print(f"\n2) COBERTURA [{e}] contra {ruta_json.name}")
+        ass = c_ass.read_text(encoding="utf-8")
+        faltan = [c.i for c in cards if normalizar(c.texto.split()[0]) not in normalizar(ass)]
+        print(f"  {'❌' if faltan else '✅'} {len(cards)-len(faltan)}/{len(cards)} tarjetas en el .ass")
+        if faltan:
+            FALLOS.append(f"[{e}] faltan en el ass: {faltan[:5]}")
+        tiras.append(comprobar_render(cards, info, video, e, str(carpeta)))
     print("\n═══ RESULTADO ═══")
     print(f"  fallos: {len(FALLOS)}   avisos: {len(AVISOS)}")
     for f in FALLOS: print("   ❌ " + f)

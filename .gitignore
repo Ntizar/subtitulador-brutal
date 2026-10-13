@@ -1,6 +1,8 @@
 # No entra en el repo: binarios y resultados de trabajo
 bin/
 salidas/
+trabajos/
+partes/
 .cachefont/
 fuentes/_prueba.ass
 fuentes/_prueba.png
@@ -18,3 +20,6 @@ pruebas/voz.mp3
 __pycache__/
 *.pyc
 .DS_Store
+
+# Lo genera fontconfig/fc-cache en la máquina
+fuentes/.uuid

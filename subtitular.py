@@ -21,7 +21,7 @@ from lib import llm as LLM            # noqa: E402
 from lib import render as REN         # noqa: E402
 from lib import tarjetas as TAR       # noqa: E402
 from lib.stt import Trozo, Whisper    # noqa: E402
-from lib.util import clave_api        # noqa: E402
+from lib.util import clave_api, huella   # noqa: E402
 
 T0 = time.time()
 
@@ -48,6 +48,8 @@ def main(argv=None):
     ap.add_argument("--mayusculas", action="store_true", default=None)
     ap.add_argument("--limite", type=float, help="procesa solo los primeros N segundos (pruebas)")
     ap.add_argument("--desde-json", help="reutiliza una transcripción ya hecha (probar estilos sin gastar API)")
+    ap.add_argument("--rehacer", action="store_true",
+                    help="ignora la caché de transcripción y vuelve a transcribir")
     ap.add_argument("--listar-estilos", action="store_true")
     a = ap.parse_args(argv)
 
@@ -81,10 +83,22 @@ def main(argv=None):
     cards = None
     tmp = None
     frases = []
+    ruta_cache = None
     if a.desde_json:                       # atajo: solo se rehace el ASS
         log("0/5 reutilizando transcripción de " + a.desde_json)
         cards, info = TAR.cargar_json(a.desde_json)
         log(f"    {len(cards)} tarjetas cargadas ({info.get('ancho')}x{info.get('alto')})")
+    if cards is None:
+        # Caché: mismo audio + mismos ajustes = misma transcripción. Sin esto, probar
+        # los 8 estilos transcribiría el MISMO audio 8 veces (8 veces el coste).
+        cache_dir = salida_dir / ".cache"
+        cache_dir.mkdir(exist_ok=True)
+        ruta_cache = cache_dir / (f"{nombre}.{huella(entrada)}"
+                                  f".r{a.ruido}.i{a.idioma}.llm{int(not a.sin_llm)}.json")
+        if ruta_cache.exists() and not a.rehacer:
+            log(f"0/5 reutilizando transcripción guardada ({ruta_cache.name})")
+            cards, info = TAR.cargar_json(str(ruta_cache))
+            log(f"    {len(cards)} tarjetas cargadas; la API no se toca (--rehacer para rehacerla)")
     if cards is None:
         log("1/5 analizando audio y detectando frases (VAD por silencios)")
         frases, info, tmp = AUD.trocear(entrada, ruido_db=a.ruido)
@@ -128,8 +142,13 @@ def main(argv=None):
         malas = [c for c in cards if c.fuente == "reglas"]
         log(f"    {len(cards)} tarjetas finales ({len(malas)} por reglas por pérdida de texto)")
         idioma_final = ok[0].idioma if ok else ""
+        if ruta_cache is not None:          # guardar para los próximos estilos
+            REN.escribir_json(cards, info, str(ruta_cache),
+                              {"estilo": "(caché)", "lineas_total": len(cards),
+                               "frases": len(frases), "idioma": idioma_final})
+            log(f"    transcripción guardada en {ruta_cache.name} (reutilizable por otros estilos)")
     else:
-        idioma_final = ""
+        idioma_final = info.get("idioma", "") or ""
 
     # ---- 4) ASS / SRT / JSON
     est = EST.ESTILOS[a.estilo]
