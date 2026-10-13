@@ -104,6 +104,20 @@ los 8 estilos en canvas con la misma transcripción que usó el CLI: se le suelt
 un vídeo local, y se ve el resultado antes de gastar un minuto de proceso. Publicada en
 **https://ntizar.github.io/subtitulador-brutal/**
 
+## Publicarla como app de NaN (`*.apps.nan.builders`)
+
+El repo incluye `Dockerfile` para NaN Cloud: la app se construye desde GitHub, así que no hace falta
+nada en tu máquina.
+
+- Variables de la app: `OPENAI_API_KEY` (NaN **no** la inyecta en las apps: hay que ponerla a mano),
+  `SB_CLAVE` (la clave de acceso que pide la página; sin ella la app queda abierta a cualquiera),
+  `SB_TAM_MAX_MB` (tamaño máximo de subida, 400 por defecto en la nube) y `SB_HORAS_VIDA` (6 h).
+- `containerPort` y el puerto con el que arranca el contenedor tienen que coincidir: si no, la app
+  queda con el pod sano pero sin ruta (404).
+- Si la plataforma deja la app en `pending` sin darle ruta (fallo de registro de apps nuevas, visto el
+  2026-10-13), se puede probar igual desde el móvil sirviéndola de esta máquina por túnel SSH:
+  `ssh -p 443 -T -R 80:localhost:8765 serveo.net`.
+
 ## Verificación
 
 `arnes.py` no comprueba que la orden termine bien: comprueba el resultado. Valida estructura
