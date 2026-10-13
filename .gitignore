@@ -1,0 +1,20 @@
+# No entra en el repo: binarios y resultados de trabajo
+bin/
+salidas/
+.cachefont/
+fuentes/_prueba.ass
+fuentes/_prueba.png
+# fonts.conf lo GENERA herramientas/instalar.sh: lleva rutas absolutas de la máquina.
+# Generado nunca trackeado (la ruta del usuario no viaja en el repo).
+fuentes/fonts.conf
+
+# Pruebas: el audio y el vídeo de prueba se generan con pruebas/hacer_video.sh
+pruebas/*.mp4
+pruebas/*.mp3
+pruebas/fotogramas/
+pruebas/voz.mp3
+
+# Basura de sistema
+__pycache__/
+*.pyc
+.DS_Store

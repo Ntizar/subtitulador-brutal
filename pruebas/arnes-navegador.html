@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>midiendo</title></head>
+<body>
+<iframe id="marco" src="http://127.0.0.1:8899/index.html" style="width:1280px;height:900px;border:0"></iframe>
+<pre id="resultado">midiendo…</pre>
+<script>
+/* Arnés en el navegador: mide la página real, no la mira.
+   Comprueba: JS sin errores, 8 miniaturas, tinta del canvas por estilo,
+   desborde horizontal y que las fuentes de los estilos están cargadas. */
+const errores=[];
+window.addEventListener("error",e=>errores.push(String(e.message)));
+const marco=document.getElementById("marco");
+marco.addEventListener("load",async()=>{
+  const w=marco.contentWindow, d=marco.contentDocument;
+  await new Promise(r=>setTimeout(r,1500));
+  const salida=[];
+  salida.push("errores_js="+errores.length+(errores.length?(" "+errores.join(";")):""));
+  salida.push("minis="+d.querySelectorAll("#tira .mini").length);
+  salida.push("orden="+d.getElementById("orden").textContent.trim());
+  salida.push("scrollWidth="+d.scrollingElement.scrollWidth+" clientWidth="+d.scrollingElement.clientWidth);
+  salida.push("desborde="+(d.scrollingElement.scrollWidth>d.scrollingElement.clientWidth?"SI":"NO"));
+  // fuentes de los estilos
+  const fam=["Inter","Archivo Black","Anton","Bebas Neue","Montserrat","Space Grotesk","Archivo"];
+  salida.push("fuentes="+fam.map(f=>f+(w.document.fonts.check('40px "'+f+'"')?"✓":"✗")).join(","));
+  // tinta del canvas grande en cada estilo
+  const c=d.getElementById("lienzo"), x=c.getContext("2d");
+  const tinta=(frac,altoFrac)=>{ const y=Math.floor(c.height*frac), hh=Math.floor(c.height*altoFrac);
+    const p=x.getImageData(0,y,c.width,hh).data; let n=0,s=0,s2=0;
+    for(let i=0;i<p.length;i+=4){const v=(p[i]+p[i+1]+p[i+2])/3;n++;s+=v;s2+=v*v;}
+    const m=s/n; return Math.round(Math.sqrt(s2/n-m*m)*10)/10; };
+  const todo=()=>{ const p=x.getImageData(0,0,c.width,c.height).data; let n=0,s=0,s2=0;
+    for(let i=0;i<p.length;i+=4){const v=(p[i]+p[i+1]+p[i+2])/3;n++;s+=v;s2+=v*v;}
+    const m=s/n; return Math.round(Math.sqrt(s2/n-m*m)*10)/10; };
+  const mini=d.querySelectorAll("#tira .mini");
+  for(let k=0;k<mini.length;k++){
+    mini[k].click();
+    await new Promise(r=>setTimeout(r,120));
+    const nombre=mini[k].querySelector("span").textContent;
+    salida.push("tinta["+nombre+"]="+tinta(0.82,0.16)+" lienzo="+todo());
+  }
+  // colocación: el texto tiene que MOVERSE (abajo -> arriba)
+  const mide=async pos=>{ d.querySelector('#posicion button[data-pos="'+pos+'"]').click();
+    await new Promise(r=>setTimeout(r,120));
+    return "abajo="+tinta(0.82,0.16)+" medio="+tinta(0.44,0.16)+" arriba="+tinta(0.06,0.16); };
+  salida.push("posicion_bajo  "+await mide("bajo"));
+  salida.push("posicion_medio "+await mide("medio"));
+  salida.push("posicion_alto  "+await mide("alto"));
+  await mide("bajo");
+  // escala y tiempo
+  d.getElementById("escala").value=140; d.getElementById("escala").dispatchEvent(new w.Event("input"));
+  await new Promise(r=>setTimeout(r,120));
+  salida.push("escala_140_abajo="+tinta(0.82,0.16));
+  d.getElementById("escala").value=70; d.getElementById("escala").dispatchEvent(new w.Event("input"));
+  await new Promise(r=>setTimeout(r,120));
+  salida.push("escala_70_abajo="+tinta(0.82,0.16));
+  d.getElementById("barra").value=800; d.getElementById("barra").dispatchEvent(new w.Event("input"));
+  await new Promise(r=>setTimeout(r,150));
+  salida.push("en_t80pct_abajo="+tinta(0.82,0.16));
+  salida.push("mayusculas_visibles="+(d.querySelector(".nz-switch__thumb")?"SI":"NO"));
+  salida.push("kpi_visibles="+d.querySelectorAll(".nz-kpi__value").length);
+  document.getElementById("resultado").textContent=salida.join("\n");
+});
+</script>
+</body></html>
