@@ -14,7 +14,7 @@ aquí. Los que lleguen mientras se trabaja esperan en cola.
 Hecho con ❤️ por David Antizar
 """
 from __future__ import annotations
-import json, os, shutil, subprocess, sys, threading, time, uuid
+import json, hmac, os, shutil, subprocess, sys, threading, time, uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -31,8 +31,12 @@ TRABAJOS = RAIZ / "trabajos"
 TRABAJOS.mkdir(exist_ok=True)
 PY = sys.executable
 EXTENSIONES = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".mts", ".mpg", ".mpeg"}
-TAM_MAX = 3 * 1024 * 1024 * 1024        # 3 GB
-HORAS_VIDA = 24                          # los trabajos viejos se borran solos
+# Límites que se ajustan por entorno: la app de NaN va más justa de disco que esta VM.
+TAM_MAX = int(float(os.environ.get("SB_TAM_MAX_MB", "3072"))) * 1024 * 1024
+HORAS_VIDA = float(os.environ.get("SB_HORAS_VIDA", "24"))
+# Clave opcional. En una URL pública es lo que impide que cualquiera gaste la
+# inferencia de la cuenta: sin ella, el primero que encuentre la dirección la usa.
+CLAVE = os.environ.get("SB_CLAVE", "").strip()
 
 app = FastAPI(title="Subtitulador Brutal", docs_url=None, redoc_url=None)
 cola: list[tuple[str, dict]] = []        # trabajos esperando
@@ -154,6 +158,38 @@ def _siguiente():
         jid, pedido = cola.pop(0)
         ocupado.set()
     threading.Thread(target=_trabajar, args=(jid, pedido), daemon=True).start()
+
+
+# ───────── la puerta (solo si hay SB_CLAVE) ─────────
+LIBRES = ("", "/", "/vista.js", "/app.js", "/api/entrar", "/api/clave")
+
+
+@app.middleware("http")
+async def puerta(request: Request, call_next):
+    if not CLAVE or request.url.path in LIBRES or request.url.path.startswith("/fuentes/"):
+        return await call_next(request)
+    traida = request.cookies.get("sb_clave") or request.headers.get("x-sb-clave", "")
+    if not hmac.compare_digest(traida, CLAVE):
+        return JSONResponse({"detail": "esta herramienta pide clave"}, status_code=401)
+    return await call_next(request)
+
+
+@app.get("/api/clave")
+def hay_clave():
+    """¿Está protegida? La página lo pregunta para pedirla solo cuando toca."""
+    return {"protegida": bool(CLAVE)}
+
+
+@app.post("/api/entrar")
+def entrar(clave: str = Form(...)):
+    if not CLAVE:
+        return {"ok": True, "protegida": False}
+    if not hmac.compare_digest(clave, CLAVE):
+        raise HTTPException(403, "esa clave no es")
+    r = JSONResponse({"ok": True, "protegida": True})
+    r.set_cookie("sb_clave", clave, httponly=True, samesite="lax",
+                 max_age=60 * 60 * 24 * 30, path="/")
+    return r
 
 
 # ───────── puerta web ─────────
@@ -304,11 +340,14 @@ def limpiar_viejos():
             shutil.rmtree(d, ignore_errors=True)
 
 
+limpiar_viejos()   # vale tanto por `python3 servidor.py` como por uvicorn directo
+
+
 if __name__ == "__main__":
     import argparse
     import uvicorn
     ap = argparse.ArgumentParser(description="Subtitulador Brutal — servidor local")
-    ap.add_argument("--puerto", type=int, default=8765)
+    ap.add_argument("--puerto", type=int, default=int(os.environ.get("PORT", 8765)))
     ap.add_argument("--host", default="127.0.0.1",
                     help="0.0.0.0 para abrirlo también al móvil de casa")
     a = ap.parse_args()

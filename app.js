@@ -219,6 +219,8 @@ function montarZona() {
   $("mayus").addEventListener("change", e => { mayus = e.target.checked; $("caja-muestra").hidden = true; });
   $("btn-subtitular").addEventListener("click", subtitular);
   $("btn-muestra").addEventListener("click", pedirMuestra);
+  $("btn-clave").addEventListener("click", entrar);
+  $("clave").addEventListener("keydown", e => { if (e.key === "Enter") entrar(); });
 }
 
 async function hayMotor() {
@@ -228,10 +230,39 @@ async function hayMotor() {
   } catch (e) { return false; }
 }
 
+/* Si la herramienta está protegida (SB_CLAVE en el servidor), pide la clave una vez.
+   Así la misma app puede estar en local sin clave y publicada con ella. */
+async function estaProtegida() {
+  try {
+    const d = await (await fetch("/api/clave", { cache: "no-store" })).json();
+    return !!d.protegida;
+  } catch (e) { return false; }
+}
+
+async function entrar() {
+  const fd = new FormData();
+  fd.append("clave", $("clave").value);
+  $("nota-clave").textContent = "Comprobando…";
+  try {
+    const r = await fetch("/api/entrar", { method: "POST", body: fd });
+    if (!r.ok) throw new Error(detalle(await r.json().catch(() => ({}))) || ("error " + r.status));
+    location.reload();                       // con la cookie puesta, todo funciona
+  } catch (e) {
+    $("nota-clave").textContent = e.message;
+  }
+}
+
 (async function arrancar() {
   montarEstilos();
   montarZona();
   if (!(await hayMotor())) {
+    if (await estaProtegida()) {             // no falta el motor: falta la clave
+      $("puerta").hidden = false;
+      $("modo").textContent = "protegida";
+      $("nota-boton").textContent = "Pega la clave para empezar.";
+      $("clave").focus();
+      return;
+    }
     $("aviso-motor").hidden = false;
     $("modo").textContent = "sin motor";
     $("nota-boton").textContent = "Esta página necesita el motor en marcha para subtitular.";

@@ -1,0 +1,15 @@
+# Lo que NO viaja a la imagen de la app
+.git
+bin/
+salidas/
+trabajos/
+partes/
+.cachefont/
+fuentes/fonts.conf
+fuentes/_prueba.*
+pruebas/*.mp4
+pruebas/*.mp3
+pruebas/fotogramas/
+__pycache__/
+*.pyc
+*.md

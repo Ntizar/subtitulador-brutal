@@ -77,6 +77,18 @@
       ordenador y la clave de la API nunca llega al navegador.</p>
   </div>
 
+  <div class="nz-alert nz-alert--warning" id="puerta" hidden>
+    <p><strong>Esta herramienta está protegida.</strong> Pega la clave para usarla: se guarda en
+      tu navegador y no se vuelve a pedir. Sin esa clave, la dirección pública sería un grifo
+      abierto de la cuenta de inferencia.</p>
+    <div class="sb-acciones">
+      <input class="nz-input" id="clave" type="password" placeholder="clave de acceso"
+             aria-label="Clave de acceso" autocomplete="current-password">
+      <button type="button" class="nz-btn nz-btn--primary" id="btn-clave">Entrar</button>
+      <span class="nz-text--small" id="nota-clave"></span>
+    </div>
+  </div>
+
   <section id="subir" class="nz-stack">
     <h2 class="nz-h2">1 · El vídeo</h2>
     <div class="nz-filezona" id="zona">
