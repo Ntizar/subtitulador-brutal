@@ -53,6 +53,9 @@ def main(argv=None):
     ap.add_argument("--color-2", default="#FFCC4D", help="color de la segunda línea (ámbar por defecto)")
     ap.add_argument("--escala-2", type=float, default=0.68,
                     help="tamaño de la segunda línea respecto a la principal (0.68 por defecto)")
+    ap.add_argument("--estilo-2", default="",
+                    help="diseño de la segunda línea: una clave del catálogo (p. ej. oro) para "
+                         "que la traducción sea otra tarjeta; vacío = línea plana de color")
     ap.add_argument("--ruido", type=float, default=-32.0, help="dB del silencio (VAD)")
     ap.add_argument("--escala", type=float, help="tamaño de fuente (fracción de la altura)")
     ap.add_argument("--mayusculas", action="store_true", default=None)
@@ -201,7 +204,8 @@ def main(argv=None):
     ruta_ass = str(salida_dir / f"{nombre_sal}.ass")
     meta = REN.escribir_ass(cards, info, a.estilo, ruta_ass, posicion=a.posicion,
                             escala=a.escala, mayusculas=a.mayusculas,
-                            secundario=({"color": a.color_2, "escala": a.escala_2}
+                            secundario=({"estilo": a.estilo_2 or "", "color": a.color_2,
+                                         "escala": a.escala_2}
                                         if a.idioma_2 else None))
     REN.escribir_srt(cards, str(salida_dir / f"{nombre_sal}.srt"))
     REN.escribir_json(cards, info, str(salida_dir / f"{nombre_sal}.json"),

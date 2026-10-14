@@ -81,9 +81,19 @@ ESTILOS = {
         color="#C9D4E4", clave="#FFFFFF", color_activo="#F2F6FF", contorno=7, sombra=0,
         color_contorno="#161A22",
         color_sombra="#5C6578", sombra_alfa=0, anim="carta", pop=1.16, espaciado=1.4,
-        bisel=4,
+        bisel=4, bisel_claro="#FFFFFF", bisel_oscuro="#6E7789", contorno_alt="#3A3350",
         descripcion="Plateado de carta coleccionable: bisel claro arriba, sombra abajo, "
                     "contorno iridiscente y fogonazo blanco en la palabra activa."),
+    # Mismo metal que Carta, en oro: es el mismo bloque de render (anim="carta"), así que lo
+    # único que cambia es la paleta — bisel crema arriba, canto bronce abajo, contorno marrón.
+    "oro": dict(
+        nombre="Oro", fuente="Archivo Black", escala=0.062, mayusculas=True,
+        color="#E3B84C", clave="#FFF6D5", color_activo="#FFFDF0", contorno=7, sombra=0,
+        color_contorno="#3A2410",
+        color_sombra="#8A5A18", sombra_alfa=0, anim="carta", pop=1.16, espaciado=1.4,
+        bisel=4, bisel_claro="#FFF6D5", bisel_oscuro="#8A5A18", contorno_alt="#7A4E14",
+        descripcion="Oro de carta coleccionable: mismo bisel que Carta, con filo crema "
+                    "arriba, canto bronce abajo y fogonazo dorado en la palabra activa."),
 }
 
 POSICIONES = {"bajo": 2, "medio": 5, "alto": 8}
@@ -96,6 +106,8 @@ DEFECTOS = dict(
     espaciado=0.0, pop=1.15, anim="pop", mayusculas=False, escala=0.058, caja=False,
     caja_color="#000000", caja_alfa=150, color_sombra="#000000", sombra_alfa=0,
     entrada_fade=0, fade=0, banda=None, nombre="?", fuente="Inter", descripcion="",
+    # bisel del metal (anim="carta"): por defecto, el plateado de siempre
+    bisel=3, bisel_claro="#FFFFFF", bisel_oscuro="#6E7789", contorno_alt="#3A3350",
 )
 
 
@@ -121,11 +133,12 @@ def _cabecera(info, est, fs, max_car, posicion, margen, sec=None):
            f"{est.get('contorno',4)},{est.get('sombra',2)},{alineacion},"
            f"{margen},{margen},{margen},1")
     if sec:
-        # Segunda línea (traducción): mismo sitio, más pequeña y en otro color. Va con
-        # su propia entrada en [V4+ Styles] porque libass toma de ahí la alineación y el
-        # margen inferior: la "Principal" sube lo que ocupa esta.
+        # Segunda línea (traducción): su propia entrada en [V4+ Styles] porque libass toma
+        # de ahí la alineación y el margen inferior: la "Principal" sube lo que ocupa esta.
+        back_sec = (c(sec["sombra"], est.get("sombra_alfa", 0)) if sec.get("sombra")
+                    else back)
         sty += (f"\nStyle: Secundario,{sec['fuente']},{sec['fs']},{c(sec['color'])},"
-                f"{c(sec['color'])},{c(sec['contorno'])},{back},"
+                f"{c(sec['color'])},{c(sec['contorno'])},{back_sec},"
                 f"0,0,0,0,100,100,0,0,1,{sec['borde']},0,{alineacion},"
                 f"{sec['margen']},{sec['margen']},{sec['margen']},1")
     return f"""[Script Info]
@@ -285,8 +298,10 @@ def eventos_de(card, info, est, fs, max_car, margen=None):
         # zamientos van en \xshad/\yshad, NO en el Shadow del estilo: así cada copia
         # conserva su contorno oscuro y el filo queda limpio.
         bisel = est.get("bisel", 3)
-        arriba = {**est, "color": "#FFFFFF", "clave": "#FFFFFF"}
-        abajo = {**est, "color": "#6E7789", "clave": "#6E7789"}
+        filo = est.get("bisel_claro") or "#FFFFFF"          # filo del metal (arriba)
+        canto = est.get("bisel_oscuro") or "#6E7789"        # canto del metal (abajo)
+        arriba = {**est, "color": filo, "clave": filo}
+        abajo = {**est, "color": canto, "clave": canto}
         for k, p in enumerate(ws):
             inicio = p["a"]
             fin = ws[k + 1]["a"] if k + 1 < len(ws) else card.fin
@@ -296,8 +311,8 @@ def eventos_de(card, info, est, fs, max_car, margen=None):
             destello = est.get("color_activo") or est["clave"]
             glint = f"\\t(0,190,\\1c{c(destello)})"
             texto = _texto_linea(ws, k, est, clave=card.clave, glint=glint)
-            # irisación: el contorno alterna carbón / violeta apagado palabra a palabra
-            iri = c("#3A3350" if k % 2 else est["color_contorno"])
+            # irisación: el contorno alterna el color oscuro del metal con su tono medio
+            iri = c(est.get("contorno_alt", "#3A3350") if k % 2 else est["color_contorno"])
             texto = (f"{{\\3c{iri}\\frz{1.2 if k % 2 else -1.2}"
                      f"\\t(0,110,\\frz0)}}{texto}")
             ev.append(_evento(inicio, fin, f"{{\\xshad0\\yshad-{bisel}}}" + _texto_linea(ws, -1, arriba), capa=1))
@@ -340,12 +355,22 @@ def generar_ass(cards, info, clave_estilo: str = "carta", posicion: str = "bajo"
     # lo que ocupa la de abajo, así las dos caben sin pisarse ni taparse con el borde.
     sec = None
     if secundario and any((getattr(c, "texto_2", "") or "").strip() for c in cards):
+        # La segunda línea puede llevar el DISEÑO de otro estilo (p. ej. la tarjeta en oro) o
+        # ser una línea plana de un color. Con diseño se copia su metal: filo, canto y fuente.
+        clave2 = (secundario.get("estilo") or "").strip()
+        e2 = estilo(clave2) if clave2 in ESTILOS else {}
         fs2 = max(14, int(round(fs * float(secundario.get("escala", 0.68)))))
         sec = dict(fs=fs2, margen=margen,
-                   color=secundario.get("color") or "#FFCC4D",
-                   contorno=secundario.get("color_contorno") or est["color_contorno"],
-                   borde=max(2, int(round(est.get("contorno", 4) * 0.6))),
-                   fuente=secundario.get("fuente") or "Inter")
+                   color=e2.get("color") or secundario.get("color") or "#FFCC4D",
+                   contorno=e2.get("color_contorno") or est["color_contorno"],
+                   borde=(max(2, int(round(e2.get("contorno", 4) * 0.7))) if e2
+                          else max(2, int(round(est.get("contorno", 4) * 0.6)))),
+                   fuente=e2.get("fuente") or secundario.get("fuente") or "Inter",
+                   sombra=e2.get("color_sombra") or "",
+                   carta=bool(e2) and e2.get("anim") == "carta",
+                   bisel=max(2, int(round((e2.get("bisel") or 3) * 0.75))),
+                   bisel_claro=e2.get("bisel_claro") or "",
+                   bisel_oscuro=e2.get("bisel_oscuro") or "")
         margen += int(fs2 * 1.34)
     cab = _cabecera(info, est, fs, max_car, posicion, margen, sec=sec)
     lineas = []
@@ -353,15 +378,38 @@ def generar_ass(cards, info, clave_estilo: str = "carta", posicion: str = "bajo"
         lineas.extend(eventos_de(card, info, est, fs, max_car, margen=margen))
         t2 = (getattr(card, "texto_2", "") or "").strip()
         if sec and t2:
-            # Una sola entrada por tarjeta: la traducción no va palabra a palabra (no
-            # hay correspondencia 1:1 con el original), entra con un fundido corto.
-            # Y va con \an2\pos explícito: con solo el margen del estilo, libass reordena
-            # las líneas activas (el bisel de Carta son TRES copias de la principal) y la
-            # traducción acababa pintada ENCIMA del original (medido en negro, 2026-10-14).
-            colocar = f"\\an2\\pos({info['ancho'] // 2},{info['alto'] - sec['margen']})"
-            lineas.append(_evento(card.inicio, card.fin,
-                                  "{" + colocar + "\\fad(60,60)}" + escapar(t2),
-                                  estilo="Secundario"))
+            # La traducción no va palabra a palabra (no hay correspondencia 1:1 con el
+            # original), así que entra como un bloque con un fundido corto. Y va con
+            # \an2\pos explícito: con solo el margen del estilo, libass reordena las líneas
+            # activas (el bisel son TRES copias de la principal) y la traducción acababa
+            # pintada ENCIMA del original (medido sobre negro, 2026-10-14).
+            colocar = (f"\\an2\\pos({info['ancho'] // 2},{info['alto'] - sec['margen']})"
+                       f"\\fad(60,60)")
+            if sec["carta"]:
+                # Mismo metal que la línea principal: tres copias (filo arriba, canto abajo,
+                # metal encima). Sin resalte de palabra y en caja baja: es una traducción.
+                ws2 = [{"w": w, "a": card.inicio, "b": card.fin} for w in t2.split()]
+                b = sec["bisel"]
+                arriba2 = {**sec, "color": sec["bisel_claro"], "clave": sec["bisel_claro"],
+                           "mayusculas": False}
+                abajo2 = {**sec, "color": sec["bisel_oscuro"], "clave": sec["bisel_oscuro"],
+                          "mayusculas": False}
+                cuerpo2 = {**sec, "mayusculas": False}
+                lineas.append(_evento(card.inicio, card.fin,
+                                      "{" + colocar + f"\\xshad0\\yshad-{b}}}"
+                                      + _texto_linea(ws2, -1, arriba2),
+                                      capa=1, estilo="Secundario"))
+                lineas.append(_evento(card.inicio, card.fin,
+                                      "{" + colocar + f"\\xshad0\\yshad{b}}}"
+                                      + _texto_linea(ws2, -1, abajo2),
+                                      capa=0, estilo="Secundario"))
+                lineas.append(_evento(card.inicio, card.fin,
+                                      "{" + colocar + "}" + _texto_linea(ws2, -1, cuerpo2),
+                                      capa=2, estilo="Secundario"))
+            else:
+                lineas.append(_evento(card.inicio, card.fin,
+                                      "{" + colocar + "}" + escapar(t2),
+                                      estilo="Secundario"))
     return cab + "\n".join(lineas) + "\n", {"fuente": est["fuente"], "tamano": fs,
                                             "max_caracteres": max_car,
                                             "estilo": est["nombre"],

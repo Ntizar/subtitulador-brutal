@@ -3,7 +3,7 @@
 Herramienta de línea de órdenes que **subtitula cualquier vídeo, del largo que sea**, con
 subtítulos animados palabra a palabra quemados dentro del fotograma. Usa la API de NaN
 (`whisper` para transcribir, `qwen3.6` para corregir y maquetar) y **libass** vía ffmpeg
-para el render final. Trae **9 estilos** —por defecto **Carta**, el plateado de carta
+para el render final. Trae **10 estilos** —por defecto **Carta**, el plateado de carta
 coleccionable— y un previsualizador web para elegir sin gastar proceso.
 
 No es un envoltorio de otra herramienta: el motor es propio porque el servicio de
@@ -38,7 +38,7 @@ un minuto.
 | El vídeo de prueba con voz sintética | `pruebas/hacer_video.sh` y `pruebas/voz_prueba.sh` |
 | La página que se publica | `index.html` |
 
-## Los 9 estilos
+## Los 10 estilos
 
 | Clave | Nombre | Qué hace |
 |---|---|---|
@@ -51,6 +51,7 @@ un minuto.
 | `maquina` | Máquina de escribir | Space Grotesk que aparece palabra a palabra con cursor |
 | `vhs` | VHS | Archivo con temblor y separación de color rojo/cian |
 | `carta` | Carta | Plateado de carta coleccionable: bisel claro arriba, canto gris abajo, contorno iridiscente y fogonazo blanco en la palabra activa. **Es el estilo por defecto** |
+| `oro` | Oro | El mismo bisel que Carta, en oro: filo crema arriba, canto bronce abajo, contorno marrón y fogonazo dorado |
 
 Las animaciones son ASS de verdad (`\t`, `\kf`, `\fad`, vectores con `\p1`), no plantillas
 de texto: el mismo fichero `.ass` sirve para quemar y para abrir en un editor.
@@ -73,6 +74,9 @@ principal solo sube lo que ocupa la de abajo.
   re-traduce** (solo vuelve a pedir los bloques que falten).
 - Si la traducción de un lote no vuelve, esos bloques salen **solo con el original**: nunca se
   inventa una traducción.
+- Con `--estilo-2 oro` la segunda línea **no es una línea plana**: lleva el mismo bisel que la
+  principal (tres copias: filo, canto y metal) pero en oro, así que cada idioma es su propia
+  tarjeta — la de arriba en plata, la de abajo en oro.
 
 ## Interfaz
 
@@ -80,12 +84,13 @@ La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la in
 
 | Opción | Para qué |
 |---|---|
-| `--estilo` | Cuál de los 9 estilos (`carta` por defecto) |
+| `--estilo` | Cuál de los 10 estilos (`carta` por defecto) |
 | `--modelo` | Qué modelo de NaN corrige y maqueta el texto (`qwen3.6` por defecto) |
 | `--plazo` | Segundos máximos para el paso de texto: si no vuelve a tiempo, ese lote va por reglas |
 | `--idioma-2` | Segundo idioma: traduce cada bloque y lo pinta debajo del original |
 | `--color-2` | Color de esa segunda línea (`#FFCC4D`, ámbar, por defecto) |
 | `--escala-2` | Tamaño de la segunda línea respecto a la principal (0.68) |
+| `--estilo-2` | Diseño de la segunda línea: una clave del catálogo (`oro`) para que la traducción sea otra tarjeta con el mismo bisel; vacío = línea plana de color |
 | `--desde-json` | Reutiliza una transcripción ya hecha: cambia de estilo sin volver a llamar a la API |
 | `--rehacer` | Ignora la transcripción guardada y la vuelve a hacer |
 | `--solo-ass` | No recodifica: escribe `.ass`, `.srt` y `.json` |
