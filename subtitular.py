@@ -48,6 +48,11 @@ def main(argv=None):
     ap.add_argument("--plazo", type=float,
                     help="segundos máximos para el paso de texto; si se pasa, ese lote va por reglas "
                          "(por defecto: 40%% de la duración del vídeo)")
+    ap.add_argument("--idioma-2",
+                    help="segundo idioma: cada bloque se traduce y sale DEBAJO del original, en otro color")
+    ap.add_argument("--color-2", default="#FFCC4D", help="color de la segunda línea (ámbar por defecto)")
+    ap.add_argument("--escala-2", type=float, default=0.68,
+                    help="tamaño de la segunda línea respecto a la principal (0.68 por defecto)")
     ap.add_argument("--ruido", type=float, default=-32.0, help="dB del silencio (VAD)")
     ap.add_argument("--escala", type=float, help="tamaño de fuente (fracción de la altura)")
     ap.add_argument("--mayusculas", action="store_true", default=None)
@@ -164,12 +169,40 @@ def main(argv=None):
     else:
         idioma_final = info.get("idioma", "") or ""
 
+    # ---- 3.5) segunda línea: traducción de cada bloque (opcional)
+    if a.idioma_2:
+        # Lo que ya venga traducido en el MISMO idioma no se vuelve a pagar (cambiar de
+        # estilo con --desde-json no re-traduce): solo se piden los bloques que falten.
+        misma = (not a.rehacer and info.get("idioma_2") == a.idioma_2)
+        pedir = [c for c in cards if not misma or not (c.texto_2 or "").strip()]
+        if not pedir:
+            log(f"3.5/5 traducción al {a.idioma_2} reutilizada del JSON ({len(cards)} bloques)")
+        else:
+            plazo_t = a.plazo or max(20.0, min(240.0, info["duracion"] * 0.4))
+            log(f"3.5/5 traduciendo {len(pedir)}/{len(cards)} bloques al {a.idioma_2} "
+                f"con {a.modelo} (plazo {plazo_t:.0f}s)")
+            trad = {}
+            try:
+                q = LLM.Qwen(clave, modelo=a.modelo, timeout=int(plazo_t))
+                trad = q.traducir([{"i": c.i, "texto": c.texto} for c in pedir], a.idioma_2,
+                                  avisar=lambda m: log("    " + m))
+            except Exception as e:                              # noqa: BLE001
+                log(f"    la traducción falló ({e}): el vídeo sale solo con el original")
+            for c in pedir:
+                c.texto_2 = trad.get(c.i, c.texto_2 if misma else "")
+            faltan_2 = [c.i for c in cards if not (c.texto_2 or "").strip()]
+            if faltan_2:
+                log(f"    {len(faltan_2)} bloques sin traducción: salen solo con el original")
+        info["idioma_2"] = a.idioma_2          # viaja en el .json para no re-traducir
+
     # ---- 4) ASS / SRT / JSON
     est = EST.ESTILOS[a.estilo]
     nombre_sal = f"{nombre}.{a.estilo}"
     ruta_ass = str(salida_dir / f"{nombre_sal}.ass")
     meta = REN.escribir_ass(cards, info, a.estilo, ruta_ass, posicion=a.posicion,
-                            escala=a.escala, mayusculas=a.mayusculas)
+                            escala=a.escala, mayusculas=a.mayusculas,
+                            secundario=({"color": a.color_2, "escala": a.escala_2}
+                                        if a.idioma_2 else None))
     REN.escribir_srt(cards, str(salida_dir / f"{nombre_sal}.srt"))
     REN.escribir_json(cards, info, str(salida_dir / f"{nombre_sal}.json"),
                       {"estilo": a.estilo, "lineas_total": len(cards),

@@ -55,6 +55,25 @@ un minuto.
 Las animaciones son ASS de verdad (`\t`, `\kf`, `\fad`, vectores con `\p1`), no plantillas
 de texto: el mismo fichero `.ass` sirve para quemar y para abrir en un editor.
 
+## Dos idiomas: la traducción debajo, en otro color
+
+Con `--idioma-2 en` cada bloque se traduce y sale **debajo del original**, en ámbar por
+defecto (`--color-2`) y más pequeño (`--escala-2`, 0.68). El original no se toca: la línea
+principal solo sube lo que ocupa la de abajo.
+
+- Son **dos estilos ASS** (`Principal` y `Secundario`), no dos etiquetas en un evento: libass
+  toma la alineación y el margen inferior de la entrada `Style:`, así que cada línea necesita
+  la suya. La traducción además lleva `\an2\pos` propio: con solo el margen del estilo, libass
+  reordena las líneas activas (el bisel de Carta son tres copias superpuestas de la principal)
+  y la traducción acaba pintada encima del original.
+- La traducción va **una entrada por bloque**, nunca palabra a palabra: no hay correspondencia
+  1:1 con el original, así que no se inventa un reparto de tiempos.
+- El `.srt` sale **bilingüe** (original arriba, traducción abajo) y el `.json` guarda `texto_2`
+  por tarjeta junto al idioma usado, así que cambiar de estilo con `--desde-json` **no
+  re-traduce** (solo vuelve a pedir los bloques que falten).
+- Si la traducción de un lote no vuelve, esos bloques salen **solo con el original**: nunca se
+  inventa una traducción.
+
 ## Interfaz
 
 La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la interfaz:
@@ -64,6 +83,9 @@ La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la in
 | `--estilo` | Cuál de los 9 estilos (`carta` por defecto) |
 | `--modelo` | Qué modelo de NaN corrige y maqueta el texto (`qwen3.6` por defecto) |
 | `--plazo` | Segundos máximos para el paso de texto: si no vuelve a tiempo, ese lote va por reglas |
+| `--idioma-2` | Segundo idioma: traduce cada bloque y lo pinta debajo del original |
+| `--color-2` | Color de esa segunda línea (`#FFCC4D`, ámbar, por defecto) |
+| `--escala-2` | Tamaño de la segunda línea respecto a la principal (0.68) |
 | `--desde-json` | Reutiliza una transcripción ya hecha: cambia de estilo sin volver a llamar a la API |
 | `--rehacer` | Ignora la transcripción guardada y la vuelve a hacer |
 | `--solo-ass` | No recodifica: escribe `.ass`, `.srt` y `.json` |

@@ -127,7 +127,10 @@ def tinta_y_hash(png: str):
 def comprobar_render(cards, info, video, clave_estilo, carpeta):
     ass = str(Path(carpeta) / f"{video.stem}.{clave_estilo}.ass")
     srt = str(Path(carpeta) / f"{video.stem}.{clave_estilo}.srt")
-    meta = REN.escribir_ass(cards, info, clave_estilo, ass, posicion="bajo")
+    meta = REN.escribir_ass(cards, info, clave_estilo, ass, posicion="bajo",
+                            secundario=({"color": "#FFCC4D", "escala": 0.68}
+                                        if any(getattr(c, "texto_2", "") for c in cards)
+                                        else None))
     REN.escribir_srt(cards, srt)
     print(f"\n3) RENDER [{clave_estilo}]  {meta['estilo']}: {meta['fuente']} "
           f"{meta['tamano']}px, máx {meta['max_caracteres']} car")

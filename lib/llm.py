@@ -53,10 +53,10 @@ class Qwen:
         except Exception:
             return {"_error": (p.stdout or p.stderr or "")[:400]}
 
-    def chat(self, usuario: str, max_tokens: int = 4000) -> str:
+    def chat(self, usuario: str, max_tokens: int = 4000, sistema: str | None = None) -> str:
         cuerpo = {
             "model": self.modelo,
-            "messages": [{"role": "system", "content": SISTEMA},
+            "messages": [{"role": "system", "content": sistema or SISTEMA},
                          {"role": "user", "content": usuario}],
             "temperature": 0.15,
             "max_tokens": max_tokens,
@@ -124,10 +124,82 @@ class Qwen:
             for res in ex.map(trabajo, lotes):
                 salida.update(res)
         if avisar:
-            avisar(f"qwen3.6 maquetó {len(salida)}/{len(tarjetas)} frases")
+            avisar(f"{self.modelo} maquetó {len(salida)}/{len(tarjetas)} frases")
             for n in self.notas_error[:3]:
-                avisar("aviso qwen3.6: " + n)
+                avisar(f"aviso {self.modelo}: " + n)
         return salida
+
+    def _traducir_lote(self, lote, idioma: str, sistema: str) -> tuple[dict, bool]:
+        """Devuelve ({i: t}, respuesta_llegó). El segundo valor distingue 'vino un JSON
+        con los índices mal' (se puede reintentar partiendo el lote) de 'no vino nada'
+        (la API falló: reintentar en trozos solo gastaría llamadas)."""
+        cuerpo = "\n".join(f'{t["i"]}: {t["texto"]}' for t in lote)
+        datos = self.sacar_json(self.chat(
+            f"Traduce cada bloque al {idioma} (índice: texto):\n\n{cuerpo}",
+            max_tokens=max(1200, 110 * len(lote)), sistema=sistema))
+        if not datos:
+            self.notas_error.append(f"traducción de {len(lote)}: finish={self.ultimo_finish} "
+                                    f"err={self.ultimo_error[:160] or 'JSON ilegible'}")
+            return {}, False
+        res = {}
+        for b in datos.get("bloques", []):
+            try:
+                i = int(b["i"])
+            except Exception:
+                continue
+            t = str(b.get("t") or "").strip()
+            if t:
+                res[i] = t
+        return res, True
+
+    def traducir(self, tarjetas, idioma: str, avisar=None) -> dict[int, str]:
+        """{i: traducción} para una segunda línea de subtítulo.
+
+        El modelo NO es de fiar con los índices: medido, con 21 bloques devolvió 20 y a
+        partir del décimo la traducción de cada uno era la del SIGUIENTE (el texto se
+        pinta detrás del original, así que un desfase se ve y queda fatal). Por eso cada
+        lote se valida: si los índices no cuadran exactamente, se parte en dos y se
+        reintenta; si un bloque solo tampoco cuadra, se queda SIN traducción (nunca se
+        inventa ni se acepta una que no se sabe de quién es).
+        """
+        salida: dict[int, str] = {}
+        lotes = [tarjetas[k:k + self.lote] for k in range(0, len(tarjetas), self.lote)]
+        sistema = SISTEMA_TRAD.replace("{idioma}", idioma)   # .format() rompería con las llaves del JSON
+
+        def trabajo(lote):
+            res, vino = self._traducir_lote(lote, idioma, sistema)
+            if set(res) == {t["i"] for t in lote}:
+                return res
+            if not vino or len(lote) == 1:
+                self.notas_error.append(
+                    f"bloque {lote[0]['i'] if len(lote) == 1 else 'lote de %d' % len(lote)}: "
+                    f"traducción descuadrada, se queda sin ella")
+                return {}
+            mitad = len(lote) // 2
+            self.notas_error.append(f"lote de {len(lote)}: índices descuadrados, lo parto en dos")
+            return {**trabajo(lote[:mitad]), **trabajo(lote[mitad:])}
+
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            for res in ex.map(trabajo, lotes):
+                salida.update(res)
+        if avisar:
+            avisar(f"{self.modelo} tradujo {len(salida)}/{len(tarjetas)} bloques a {idioma}")
+            for n in self.notas_error[:3]:
+                avisar(f"aviso traducción: " + n)
+        return salida
+
+
+SISTEMA_TRAD = """Eres un traductor profesional de subtítulos para vídeo.
+Recibes bloques de subtítulo numerados (índice: texto) y devuelves SOLO un JSON:
+
+{"bloques":[{"i":0,"t":"..."}]}
+
+Reglas:
+1. Traduce al {idioma}. Natural y coloquial, como se subtitula de verdad: nada de traducción literal.
+2. MISMA cantidad de elementos y los MISMOS índices que el original. No juntes ni separes bloques.
+3. Respeta la puntuación final y NO añadas ni quites información.
+4. Si el bloque es un nombre propio, una marca o una interjección, déjalo tal cual.
+5. Nada más que el JSON."""
 
 
 def partir_por_reglas(texto: str, max_palabras: int = 4, max_car: int = 24) -> list[dict]:

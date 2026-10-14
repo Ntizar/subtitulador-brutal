@@ -29,6 +29,7 @@ class Tarjeta:
     fuente: str = "llm"          # llm | reglas
     cobertura: float = 1.0
     palabras: list = field(default_factory=list)
+    texto_2: str = ""            # segunda línea (traducción), opcional
 
     def dict(self) -> dict:
         d = asdict(self)
@@ -144,7 +145,7 @@ def cargar_json(ruta: str):
     for t in d.get("tarjetas", []):
         c = Tarjeta(i=t["i"], inicio=t["inicio"], fin=t["fin"], texto=t["texto"],
                     clave=t.get("clave", ""), fuente=t.get("fuente", "json"),
-                    cobertura=t.get("cobertura", 1.0))
+                    cobertura=t.get("cobertura", 1.0), texto_2=t.get("texto_2", ""))
         c.palabras = [Palabra(w=p["w"], a=p["a"], b=p["b"]) for p in t.get("palabras", [])]
         cards.append(c)
     return cards, d.get("info", {})

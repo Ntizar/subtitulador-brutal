@@ -106,7 +106,7 @@ def estilo(clave: str) -> dict:
     return {**DEFECTOS, **ESTILOS[clave]}
 
 
-def _cabecera(info, est, fs, max_car, posicion, margen):
+def _cabecera(info, est, fs, max_car, posicion, margen, sec=None):
     alineacion = POSICIONES[posicion]
     borde_estilo = 3 if est.get("caja") else 1
     back = c(est["caja_color"], est.get("caja_alfa", 128)) if est.get("caja") else \
@@ -114,12 +114,20 @@ def _cabecera(info, est, fs, max_car, posicion, margen):
     karaoke = est.get("anim") == "karaoke"
     # karaoke: PrimaryColour es el color tras el barrido y SecondaryColour el de antes
     prim = c(est["clave"]) if karaoke else c(est["color"])
-    sec = c(est["color"]) if karaoke else c(est["clave"])
-    sty = (f"Style: Principal,{est['fuente']},{fs},{prim},{sec},"
+    sec_col = c(est["color"]) if karaoke else c(est["clave"])
+    sty = (f"Style: Principal,{est['fuente']},{fs},{prim},{sec_col},"
            f"{c(est['color_contorno'])},{back},"
            f"0,0,0,0,100,100,{est.get('espaciado',0)},0,{borde_estilo},"
            f"{est.get('contorno',4)},{est.get('sombra',2)},{alineacion},"
            f"{margen},{margen},{margen},1")
+    if sec:
+        # Segunda línea (traducción): mismo sitio, más pequeña y en otro color. Va con
+        # su propia entrada en [V4+ Styles] porque libass toma de ahí la alineación y el
+        # margen inferior: la "Principal" sube lo que ocupa esta.
+        sty += (f"\nStyle: Secundario,{sec['fuente']},{sec['fs']},{c(sec['color'])},"
+                f"{c(sec['color'])},{c(sec['contorno'])},{back},"
+                f"0,0,0,0,100,100,0,0,1,{sec['borde']},0,{alineacion},"
+                f"{sec['margen']},{sec['margen']},{sec['margen']},1")
     return f"""[Script Info]
 ; Generado por Subtitulador Brutal
 ScriptType: v4.00+
@@ -314,9 +322,10 @@ def eventos_de(card, info, est, fs, max_car, margen=None):
     return ev
 
 
-def generar_ass(cards, info, clave_estilo: str = "aurora7", posicion: str = "bajo",
+def generar_ass(cards, info, clave_estilo: str = "carta", posicion: str = "bajo",
                 escala: float | None = None, mayusculas: bool | None = None,
-                max_car_objetivo: int = 22, margen_pct: float = 0.11):
+                max_car_objetivo: int = 22, margen_pct: float = 0.11,
+                secundario: dict | None = None):
     est = estilo(clave_estilo)
     if escala:
         est["escala"] = escala
@@ -327,13 +336,36 @@ def generar_ass(cards, info, clave_estilo: str = "aurora7", posicion: str = "baj
     margen = int(info["alto"] * margen_pct)
     if posicion == "alto":
         margen = int(info["alto"] * 0.12)
-    cab = _cabecera(info, est, fs, max_car, posicion, margen)
+    # Segunda línea (traducción) debajo de la principal: la principal sube exactamente
+    # lo que ocupa la de abajo, así las dos caben sin pisarse ni taparse con el borde.
+    sec = None
+    if secundario and any((getattr(c, "texto_2", "") or "").strip() for c in cards):
+        fs2 = max(14, int(round(fs * float(secundario.get("escala", 0.68)))))
+        sec = dict(fs=fs2, margen=margen,
+                   color=secundario.get("color") or "#FFCC4D",
+                   contorno=secundario.get("color_contorno") or est["color_contorno"],
+                   borde=max(2, int(round(est.get("contorno", 4) * 0.6))),
+                   fuente=secundario.get("fuente") or "Inter")
+        margen += int(fs2 * 1.34)
+    cab = _cabecera(info, est, fs, max_car, posicion, margen, sec=sec)
     lineas = []
     for card in cards:
         lineas.extend(eventos_de(card, info, est, fs, max_car, margen=margen))
+        t2 = (getattr(card, "texto_2", "") or "").strip()
+        if sec and t2:
+            # Una sola entrada por tarjeta: la traducción no va palabra a palabra (no
+            # hay correspondencia 1:1 con el original), entra con un fundido corto.
+            # Y va con \an2\pos explícito: con solo el margen del estilo, libass reordena
+            # las líneas activas (el bisel de Carta son TRES copias de la principal) y la
+            # traducción acababa pintada ENCIMA del original (medido en negro, 2026-10-14).
+            colocar = f"\\an2\\pos({info['ancho'] // 2},{info['alto'] - sec['margen']})"
+            lineas.append(_evento(card.inicio, card.fin,
+                                  "{" + colocar + "\\fad(60,60)}" + escapar(t2),
+                                  estilo="Secundario"))
     return cab + "\n".join(lineas) + "\n", {"fuente": est["fuente"], "tamano": fs,
                                             "max_caracteres": max_car,
-                                            "estilo": est["nombre"]}
+                                            "estilo": est["nombre"],
+                                            "secundario": (sec["fs"] if sec else 0)}
 
 
 def listar():

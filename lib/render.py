@@ -16,7 +16,11 @@ def escribir_ass(cards, info, estilo: str, ruta: str, **op) -> dict:
 def escribir_srt(cards, ruta: str):
     trozos = []
     for n, c in enumerate(cards, 1):
-        trozos.append(f"{n}\n{srt_tiempo(c.inicio)} --> {srt_tiempo(c.fin)}\n{c.texto}\n")
+        texto = c.texto
+        t2 = (getattr(c, "texto_2", "") or "").strip()
+        if t2:
+            texto = f"{texto}\n{t2}"      # SRT bilingüe: original arriba, traducción abajo
+        trozos.append(f"{n}\n{srt_tiempo(c.inicio)} --> {srt_tiempo(c.fin)}\n{texto}\n")
     Path(ruta).write_text("\n".join(trozos), encoding="utf-8")
 
 
