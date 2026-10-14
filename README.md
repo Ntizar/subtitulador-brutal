@@ -3,8 +3,9 @@
 Herramienta de línea de órdenes que **subtitula cualquier vídeo, del largo que sea**, con
 subtítulos animados palabra a palabra quemados dentro del fotograma. Usa la API de NaN
 (`whisper` para transcribir, `qwen3.6` para corregir y maquetar) y **libass** vía ffmpeg
-para el render final. Trae **10 estilos** —por defecto **Carta**, el plateado de carta
-coleccionable— y un previsualizador web para elegir sin gastar proceso.
+para el render final. Trae **11 estilos** —por defecto **Carta**, el plateado de carta
+coleccionable, con sus hermanos **Oro** y **Bronce**— y un previsualizador web para elegir sin
+gastar proceso.
 
 No es un envoltorio de otra herramienta: el motor es propio porque el servicio de
 transcripción tiene dos limitaciones medidas y comprobadas — **no devuelve tiempos por
@@ -38,7 +39,7 @@ un minuto.
 | El vídeo de prueba con voz sintética | `pruebas/hacer_video.sh` y `pruebas/voz_prueba.sh` |
 | La página que se publica | `index.html` |
 
-## Los 10 estilos
+## Los 11 estilos
 
 | Clave | Nombre | Qué hace |
 |---|---|---|
@@ -52,31 +53,35 @@ un minuto.
 | `vhs` | VHS | Archivo con temblor y separación de color rojo/cian |
 | `carta` | Carta | Plateado de carta coleccionable: bisel claro arriba, canto gris abajo, contorno iridiscente y fogonazo blanco en la palabra activa. **Es el estilo por defecto** |
 | `oro` | Oro | El mismo bisel que Carta, en oro: filo crema arriba, canto bronce abajo, contorno marrón y fogonazo dorado |
+| `bronce` | Bronce | El tercer metal de la familia: filo melocotón arriba, canto marrón abajo y contorno casi negro |
 
 Las animaciones son ASS de verdad (`\t`, `\kf`, `\fad`, vectores con `\p1`), no plantillas
 de texto: el mismo fichero `.ass` sirve para quemar y para abrir en un editor.
 
-## Dos idiomas: la traducción debajo, en otro color
+## Hasta tres idiomas, cada uno con su metal
 
-Con `--idioma-2 en` cada bloque se traduce y sale **debajo del original**, en ámbar por
-defecto (`--color-2`) y más pequeño (`--escala-2`, 0.68). El original no se toca: la línea
-principal solo sube lo que ocupa la de abajo.
+Con `--idioma-2 en` (y opcionalmente `--idioma-3 fr`) cada bloque se traduce y las traducciones
+salen **debajo del original**, cada una con su color (`--color-2`, ámbar por defecto) o con el
+**diseño de una tarjeta** si le pasas `--estilo-2 carta --estilo-3 bronce`: entonces la de arriba
+es el original en oro, la segunda en plata y la tercera en bronce. Las líneas 2ª y 3ª van **del
+mismo tamaño** por defecto (`--escala-2`, y `--escala-3` cae a ese valor si no se dice otra cosa).
 
-- Son **dos estilos ASS** (`Principal` y `Secundario`), no dos etiquetas en un evento: libass
-  toma la alineación y el margen inferior de la entrada `Style:`, así que cada línea necesita
-  la suya. La traducción además lleva `\an2\pos` propio: con solo el margen del estilo, libass
-  reordena las líneas activas (el bisel de Carta son tres copias superpuestas de la principal)
-  y la traducción acaba pintada encima del original.
+- Va **una entrada de estilo por línea** (`Principal`, `Secundario`, `Tercero`), no dos etiquetas
+  en un evento: libass toma la alineación y el margen inferior de la entrada `Style:`, así que
+  cada línea necesita la suya. Cada traducción además lleva `\an2\pos` propio: con solo el margen
+  del estilo, libass reordena las líneas activas (el bisel de Carta son tres copias superpuestas
+  de la principal) y la traducción acaba pintada encima del original. La principal sube lo que
+  ocupan las de abajo, y estas se reparten de abajo arriba.
 - La traducción va **una entrada por bloque**, nunca palabra a palabra: no hay correspondencia
   1:1 con el original, así que no se inventa un reparto de tiempos.
-- El `.srt` sale **bilingüe** (original arriba, traducción abajo) y el `.json` guarda `texto_2`
-  por tarjeta junto al idioma usado, así que cambiar de estilo con `--desde-json` **no
-  re-traduce** (solo vuelve a pedir los bloques que falten).
+- El `.srt` sale **multilingüe** (original arriba y debajo cada traducción) y el `.json` guarda
+  `texto_2`/`texto_3` por tarjeta junto a los idiomas usados, así que cambiar de estilo con
+  `--desde-json` **no re-traduce** (solo vuelve a pedir los bloques que falten).
 - Si la traducción de un lote no vuelve, esos bloques salen **solo con el original**: nunca se
   inventa una traducción.
-- Con `--estilo-2 oro` la segunda línea **no es una línea plana**: lleva el mismo bisel que la
-  principal (tres copias: filo, canto y metal) pero en oro, así que cada idioma es su propia
-  tarjeta — la de arriba en plata, la de abajo en oro.
+- Con `--estilo-2 carta --estilo-3 bronce` las traducciones **no son líneas planas**: llevan el
+  mismo bisel que la principal (tres copias: filo, canto y metal), así que cada idioma es su
+  propia tarjeta — arriba oro, luego plata y luego bronce.
 
 ## Interfaz
 
@@ -84,13 +89,17 @@ La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la in
 
 | Opción | Para qué |
 |---|---|
-| `--estilo` | Cuál de los 10 estilos (`carta` por defecto) |
+| `--estilo` | Cuál de los 11 estilos (`carta` por defecto) |
 | `--modelo` | Qué modelo de NaN corrige y maqueta el texto (`qwen3.6` por defecto) |
 | `--plazo` | Segundos máximos para el paso de texto: si no vuelve a tiempo, ese lote va por reglas |
 | `--idioma-2` | Segundo idioma: traduce cada bloque y lo pinta debajo del original |
 | `--color-2` | Color de esa segunda línea (`#FFCC4D`, ámbar, por defecto) |
 | `--escala-2` | Tamaño de la segunda línea respecto a la principal (0.68) |
-| `--estilo-2` | Diseño de la segunda línea: una clave del catálogo (`oro`) para que la traducción sea otra tarjeta con el mismo bisel; vacío = línea plana de color |
+| `--estilo-2` | Diseño de la segunda línea: una clave del catálogo (`carta` para plata, `oro`, `bronce`) para que la traducción sea otra tarjeta con el mismo bisel; vacío = línea plana de color |
+| `--idioma-3` | Tercer idioma: segunda traducción, debajo de la anterior |
+| `--estilo-3` | Diseño de la tercera línea (`bronce` por ejemplo) |
+| `--escala-3` | Tamaño de la tercera línea (por defecto, el mismo que la segunda) |
+| `--color-3` | Color de la tercera línea (vacío = el mismo que la segunda) |
 | `--desde-json` | Reutiliza una transcripción ya hecha: cambia de estilo sin volver a llamar a la API |
 | `--rehacer` | Ignora la transcripción guardada y la vuelve a hacer |
 | `--solo-ass` | No recodifica: escribe `.ass`, `.srt` y `.json` |

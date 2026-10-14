@@ -56,6 +56,13 @@ def main(argv=None):
     ap.add_argument("--estilo-2", default="",
                     help="diseño de la segunda línea: una clave del catálogo (p. ej. oro) para "
                          "que la traducción sea otra tarjeta; vacío = línea plana de color")
+    ap.add_argument("--idioma-3", help="tercer idioma: segunda traducción, debajo de la anterior")
+    ap.add_argument("--color-3", default="",
+                    help="color de la tercera línea (vacío = el mismo que la segunda)")
+    ap.add_argument("--escala-3", type=float, default=None,
+                    help="tamaño de la tercera línea (por defecto, el mismo que la segunda)")
+    ap.add_argument("--estilo-3", default="",
+                    help="diseño de la tercera línea (p. ej. bronce)")
     ap.add_argument("--ruido", type=float, default=-32.0, help="dB del silencio (VAD)")
     ap.add_argument("--escala", type=float, help="tamaño de fuente (fracción de la altura)")
     ap.add_argument("--mayusculas", action="store_true", default=None)
@@ -172,41 +179,46 @@ def main(argv=None):
     else:
         idioma_final = info.get("idioma", "") or ""
 
-    # ---- 3.5) segunda línea: traducción de cada bloque (opcional)
-    if a.idioma_2:
+    # ---- 3.5) líneas de traducción (2ª y 3ª), opcionales
+    for campo, idioma in (("texto_2", a.idioma_2), ("texto_3", a.idioma_3)):
+        if not idioma:
+            continue
+        marca = "idioma_" + campo[-1]           # idioma_2 / idioma_3, viaja en el .json
         # Lo que ya venga traducido en el MISMO idioma no se vuelve a pagar (cambiar de
         # estilo con --desde-json no re-traduce): solo se piden los bloques que falten.
-        misma = (not a.rehacer and info.get("idioma_2") == a.idioma_2)
-        pedir = [c for c in cards if not misma or not (c.texto_2 or "").strip()]
+        misma = (not a.rehacer and info.get(marca) == idioma)
+        pedir = [c for c in cards if not misma or not (getattr(c, campo) or "").strip()]
         if not pedir:
-            log(f"3.5/5 traducción al {a.idioma_2} reutilizada del JSON ({len(cards)} bloques)")
+            log(f"3.5/5 traducción al {idioma} reutilizada del JSON ({len(cards)} bloques)")
         else:
             plazo_t = a.plazo or max(20.0, min(240.0, info["duracion"] * 0.4))
-            log(f"3.5/5 traduciendo {len(pedir)}/{len(cards)} bloques al {a.idioma_2} "
+            log(f"3.5/5 traduciendo {len(pedir)}/{len(cards)} bloques al {idioma} "
                 f"con {a.modelo} (plazo {plazo_t:.0f}s)")
             trad = {}
             try:
                 q = LLM.Qwen(clave, modelo=a.modelo, timeout=int(plazo_t))
-                trad = q.traducir([{"i": c.i, "texto": c.texto} for c in pedir], a.idioma_2,
+                trad = q.traducir([{"i": c.i, "texto": c.texto} for c in pedir], idioma,
                                   avisar=lambda m: log("    " + m))
             except Exception as e:                              # noqa: BLE001
-                log(f"    la traducción falló ({e}): el vídeo sale solo con el original")
+                log(f"    la traducción al {idioma} falló ({e}): esos bloques salen sin ella")
             for c in pedir:
-                c.texto_2 = trad.get(c.i, c.texto_2 if misma else "")
-            faltan_2 = [c.i for c in cards if not (c.texto_2 or "").strip()]
-            if faltan_2:
-                log(f"    {len(faltan_2)} bloques sin traducción: salen solo con el original")
-        info["idioma_2"] = a.idioma_2          # viaja en el .json para no re-traducir
+                setattr(c, campo, trad.get(c.i, getattr(c, campo) if misma else ""))
+            faltan = [c.i for c in cards if not (getattr(c, campo) or "").strip()]
+            if faltan:
+                log(f"    {len(faltan)} bloques sin traducción al {idioma}")
+        info[marca] = idioma
 
     # ---- 4) ASS / SRT / JSON
     est = EST.ESTILOS[a.estilo]
     nombre_sal = f"{nombre}.{a.estilo}"
     ruta_ass = str(salida_dir / f"{nombre_sal}.ass")
+    secundario = ({"estilo": a.estilo_2 or "", "color": a.color_2, "escala": a.escala_2}
+                  if a.idioma_2 else None)
+    terciario = ({"estilo": a.estilo_3 or "", "color": a.color_3 or a.color_2,
+                  "escala": a.escala_3 or a.escala_2} if a.idioma_3 else None)
     meta = REN.escribir_ass(cards, info, a.estilo, ruta_ass, posicion=a.posicion,
                             escala=a.escala, mayusculas=a.mayusculas,
-                            secundario=({"estilo": a.estilo_2 or "", "color": a.color_2,
-                                         "escala": a.escala_2}
-                                        if a.idioma_2 else None))
+                            secundario=secundario, terciario=terciario)
     REN.escribir_srt(cards, str(salida_dir / f"{nombre_sal}.srt"))
     REN.escribir_json(cards, info, str(salida_dir / f"{nombre_sal}.json"),
                       {"estilo": a.estilo, "lineas_total": len(cards),

@@ -94,6 +94,16 @@ ESTILOS = {
         bisel=4, bisel_claro="#FFF6D5", bisel_oscuro="#8A5A18", contorno_alt="#7A4E14",
         descripcion="Oro de carta coleccionable: mismo bisel que Carta, con filo crema "
                     "arriba, canto bronce abajo y fogonazo dorado en la palabra activa."),
+    # Bronce: tercer metal de la familia (oro / plata / bronce). Igual que los otros dos, es
+    # solo paleta; el bronce es más cobrizo y oscuro para que no se confunda con el oro.
+    "bronce": dict(
+        nombre="Bronce", fuente="Archivo Black", escala=0.062, mayusculas=True,
+        color="#C4763F", clave="#F2C79A", color_activo="#FFE7CE", contorno=7, sombra=0,
+        color_contorno="#2B1608",
+        color_sombra="#6E3D14", sombra_alfa=0, anim="carta", pop=1.16, espaciado=1.4,
+        bisel=4, bisel_claro="#F2C79A", bisel_oscuro="#6E3D14", contorno_alt="#8A5527",
+        descripcion="Bronce de carta coleccionable: filo melocotón arriba, canto marrón "
+                    "abajo y contorno casi negro. El tercer metal de la familia."),
 }
 
 POSICIONES = {"bajo": 2, "medio": 5, "alto": 8}
@@ -118,7 +128,7 @@ def estilo(clave: str) -> dict:
     return {**DEFECTOS, **ESTILOS[clave]}
 
 
-def _cabecera(info, est, fs, max_car, posicion, margen, sec=None):
+def _cabecera(info, est, fs, max_car, posicion, margen, secs=None):
     alineacion = POSICIONES[posicion]
     borde_estilo = 3 if est.get("caja") else 1
     back = c(est["caja_color"], est.get("caja_alfa", 128)) if est.get("caja") else \
@@ -132,15 +142,17 @@ def _cabecera(info, est, fs, max_car, posicion, margen, sec=None):
            f"0,0,0,0,100,100,{est.get('espaciado',0)},0,{borde_estilo},"
            f"{est.get('contorno',4)},{est.get('sombra',2)},{alineacion},"
            f"{margen},{margen},{margen},1")
-    if sec:
-        # Segunda línea (traducción): su propia entrada en [V4+ Styles] porque libass toma
-        # de ahí la alineación y el margen inferior: la "Principal" sube lo que ocupa esta.
-        back_sec = (c(sec["sombra"], est.get("sombra_alfa", 0)) if sec.get("sombra")
-                    else back)
-        sty += (f"\nStyle: Secundario,{sec['fuente']},{sec['fs']},{c(sec['color'])},"
-                f"{c(sec['color'])},{c(sec['contorno'])},{back_sec},"
-                f"0,0,0,0,100,100,0,0,1,{sec['borde']},0,{alineacion},"
-                f"{sec['margen']},{sec['margen']},{sec['margen']},1")
+    if secs:
+        for s in secs:
+            # Cada línea de traducción tiene su propia entrada en [V4+ Styles] porque libass
+            # toma de ahí la alineación y el margen; la "Principal" ya ha subido lo que
+            # ocupan todas ellas.
+            back_s = (c(s["sombra"], est.get("sombra_alfa", 0)) if s.get("sombra")
+                      else back)
+            sty += (f"\nStyle: {s['nombre']},{s['fuente']},{s['fs']},{c(s['color'])},"
+                    f"{c(s['color'])},{c(s['contorno'])},{back_s},"
+                    f"0,0,0,0,100,100,0,0,1,{s['borde']},0,{alineacion},"
+                    f"{s['margen']},{s['margen']},{s['margen']},1")
     return f"""[Script Info]
 ; Generado por Subtitulador Brutal
 ScriptType: v4.00+
@@ -340,7 +352,7 @@ def eventos_de(card, info, est, fs, max_car, margen=None):
 def generar_ass(cards, info, clave_estilo: str = "carta", posicion: str = "bajo",
                 escala: float | None = None, mayusculas: bool | None = None,
                 max_car_objetivo: int = 22, margen_pct: float = 0.11,
-                secundario: dict | None = None):
+                secundario: dict | None = None, terciario: dict | None = None):
     est = estilo(clave_estilo)
     if escala:
         est["escala"] = escala
@@ -351,69 +363,80 @@ def generar_ass(cards, info, clave_estilo: str = "carta", posicion: str = "bajo"
     margen = int(info["alto"] * margen_pct)
     if posicion == "alto":
         margen = int(info["alto"] * 0.12)
-    # Segunda línea (traducción) debajo de la principal: la principal sube exactamente
-    # lo que ocupa la de abajo, así las dos caben sin pisarse ni taparse con el borde.
-    sec = None
-    if secundario and any((getattr(c, "texto_2", "") or "").strip() for c in cards):
-        # La segunda línea puede llevar el DISEÑO de otro estilo (p. ej. la tarjeta en oro) o
-        # ser una línea plana de un color. Con diseño se copia su metal: filo, canto y fuente.
-        clave2 = (secundario.get("estilo") or "").strip()
-        e2 = estilo(clave2) if clave2 in ESTILOS else {}
-        fs2 = max(14, int(round(fs * float(secundario.get("escala", 0.68)))))
-        sec = dict(fs=fs2, margen=margen,
-                   color=e2.get("color") or secundario.get("color") or "#FFCC4D",
-                   contorno=e2.get("color_contorno") or est["color_contorno"],
-                   borde=(max(2, int(round(e2.get("contorno", 4) * 0.7))) if e2
-                          else max(2, int(round(est.get("contorno", 4) * 0.6)))),
-                   fuente=e2.get("fuente") or secundario.get("fuente") or "Inter",
-                   sombra=e2.get("color_sombra") or "",
-                   carta=bool(e2) and e2.get("anim") == "carta",
-                   bisel=max(2, int(round((e2.get("bisel") or 3) * 0.75))),
-                   bisel_claro=e2.get("bisel_claro") or "",
-                   bisel_oscuro=e2.get("bisel_oscuro") or "")
-        margen += int(fs2 * 1.34)
-    cab = _cabecera(info, est, fs, max_car, posicion, margen, sec=sec)
+    # Líneas de traducción debajo de la principal (2ª y 3ª). La principal sube exactamente
+    # lo que ocupan las de abajo, así todas caben sin pisarse ni taparse con el borde.
+    extras = []
+    for cfg, campo, nombre in ((secundario, "texto_2", "Secundario"),
+                               (terciario, "texto_3", "Tercero")):
+        if not cfg or not any((getattr(c, campo, "") or "").strip() for c in cards):
+            continue
+        # Cada línea puede llevar el DISEÑO de otro estilo (la tarjeta en plata, en bronce…)
+        # o ser una línea plana de un color. Con diseño se copia su metal: filo, canto, fuente.
+        clave_e = (cfg.get("estilo") or "").strip()
+        ee = estilo(clave_e) if clave_e in ESTILOS else {}
+        extras.append(dict(
+            campo=campo, nombre=nombre,
+            fs=max(14, int(round(fs * float(cfg.get("escala", 0.68))))),
+            color=ee.get("color") or cfg.get("color") or "#FFCC4D",
+            contorno=ee.get("color_contorno") or est["color_contorno"],
+            borde=(max(2, int(round(ee.get("contorno", 4) * 0.7))) if ee
+                   else max(2, int(round(est.get("contorno", 4) * 0.6)))),
+            fuente=ee.get("fuente") or cfg.get("fuente") or "Inter",
+            sombra=ee.get("color_sombra") or "",
+            carta=bool(ee) and ee.get("anim") == "carta",
+            bisel=max(2, int(round((ee.get("bisel") or 3) * 0.75))),
+            bisel_claro=ee.get("bisel_claro") or "",
+            bisel_oscuro=ee.get("bisel_oscuro") or ""))
+    # De abajo arriba: la última en pantalla se queda en el margen base y cada una sube lo
+    # que ocupa la de debajo. Así el orden en el fotograma es siempre principal > 2ª > 3ª.
+    alturas = 0
+    for sp in reversed(extras):
+        sp["margen"] = margen + alturas
+        alturas += int(sp["fs"] * 1.34)
+    margen += alturas
+    cab = _cabecera(info, est, fs, max_car, posicion, margen, secs=extras)
     lineas = []
     for card in cards:
         lineas.extend(eventos_de(card, info, est, fs, max_car, margen=margen))
-        t2 = (getattr(card, "texto_2", "") or "").strip()
-        if sec and t2:
+        for sp in extras:
+            t2 = (getattr(card, sp["campo"], "") or "").strip()
+            if not t2:
+                continue
             # La traducción no va palabra a palabra (no hay correspondencia 1:1 con el
-            # original), así que entra como un bloque con un fundido corto. Y va con
-            # \an2\pos explícito: con solo el margen del estilo, libass reordena las líneas
-            # activas (el bisel son TRES copias de la principal) y la traducción acababa
-            # pintada ENCIMA del original (medido sobre negro, 2026-10-14).
-            colocar = (f"\\an2\\pos({info['ancho'] // 2},{info['alto'] - sec['margen']})"
+            # original): entra como bloque con un fundido corto y posición explícita. Con
+            # solo el margen del estilo, libass reordena las líneas activas (el bisel son
+            # TRES copias de la principal) y la traducción acababa ENCIMA del original.
+            colocar = (f"\\an2\\pos({info['ancho'] // 2},{info['alto'] - sp['margen']})"
                        f"\\fad(60,60)")
-            if sec["carta"]:
-                # Mismo metal que la línea principal: tres copias (filo arriba, canto abajo,
-                # metal encima). Sin resalte de palabra y en caja baja: es una traducción.
+            if sp["carta"]:
+                # Mismo metal que su tarjeta: tres copias (filo arriba, canto abajo, metal
+                # encima). Sin resalte de palabra y en caja baja: es una traducción.
                 ws2 = [{"w": w, "a": card.inicio, "b": card.fin} for w in t2.split()]
-                b = sec["bisel"]
-                arriba2 = {**sec, "color": sec["bisel_claro"], "clave": sec["bisel_claro"],
+                b = sp["bisel"]
+                arriba2 = {**sp, "color": sp["bisel_claro"], "clave": sp["bisel_claro"],
                            "mayusculas": False}
-                abajo2 = {**sec, "color": sec["bisel_oscuro"], "clave": sec["bisel_oscuro"],
+                abajo2 = {**sp, "color": sp["bisel_oscuro"], "clave": sp["bisel_oscuro"],
                           "mayusculas": False}
-                cuerpo2 = {**sec, "mayusculas": False}
+                cuerpo2 = {**sp, "mayusculas": False}
                 lineas.append(_evento(card.inicio, card.fin,
                                       "{" + colocar + f"\\xshad0\\yshad-{b}}}"
                                       + _texto_linea(ws2, -1, arriba2),
-                                      capa=1, estilo="Secundario"))
+                                      capa=1, estilo=sp["nombre"]))
                 lineas.append(_evento(card.inicio, card.fin,
                                       "{" + colocar + f"\\xshad0\\yshad{b}}}"
                                       + _texto_linea(ws2, -1, abajo2),
-                                      capa=0, estilo="Secundario"))
+                                      capa=0, estilo=sp["nombre"]))
                 lineas.append(_evento(card.inicio, card.fin,
                                       "{" + colocar + "}" + _texto_linea(ws2, -1, cuerpo2),
-                                      capa=2, estilo="Secundario"))
+                                      capa=2, estilo=sp["nombre"]))
             else:
                 lineas.append(_evento(card.inicio, card.fin,
                                       "{" + colocar + "}" + escapar(t2),
-                                      estilo="Secundario"))
+                                      estilo=sp["nombre"]))
     return cab + "\n".join(lineas) + "\n", {"fuente": est["fuente"], "tamano": fs,
                                             "max_caracteres": max_car,
                                             "estilo": est["nombre"],
-                                            "secundario": (sec["fs"] if sec else 0)}
+                                            "extras": [sp["fs"] for sp in extras]}
 
 
 def listar():
