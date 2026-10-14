@@ -76,6 +76,14 @@ ESTILOS = {
         color="#FDE047", clave="#FF2D55", contorno=5, sombra=2, color_contorno="#1B0030",
         color_sombra="#22D3EE", sombra_alfa=120, anim="glitch", espaciado=1.6,
         descripcion="Cinta vieja: temblor, separación de color y activo en rojo."),
+    "carta": dict(
+        nombre="Carta", fuente="Archivo Black", escala=0.062, mayusculas=True,
+        color="#C9D4E4", clave="#FFFFFF", color_activo="#F2F6FF", contorno=7, sombra=0,
+        color_contorno="#161A22",
+        color_sombra="#5C6578", sombra_alfa=0, anim="carta", pop=1.16, espaciado=1.4,
+        bisel=4,
+        descripcion="Plateado de carta coleccionable: bisel claro arriba, sombra abajo, "
+                    "contorno iridiscente y fogonazo blanco en la palabra activa."),
 }
 
 POSICIONES = {"bajo": 2, "medio": 5, "alto": 8}
@@ -150,7 +158,7 @@ def max_caracteres(info, est, fs):
     return max(8, int((info["ancho"] * 0.90) / (fs * factor)))
 
 
-def _texto_linea(palabras, activo, est, karaoke=False, clave=""):
+def _texto_linea(palabras, activo, est, karaoke=False, clave="", glint=""):
     """Construye la línea con la palabra `activo` resaltada.
 
     OJO: en ASS un bloque {\\c...} afecta a TODO lo que va detrás en la línea,
@@ -158,6 +166,9 @@ def _texto_linea(palabras, activo, est, karaoke=False, clave=""):
 
     Si la palabra activa es además la CLAVE de la tarjeta, el golpe es más
     grande (el diseño tiene intención: lo importante se nota).
+
+    `glint` = etiquetas extra para la palabra activa (el destello del estilo
+    Carta: entra en blanco y se asienta en plata con un \\t).
     """
     norm = c(est["color"])
     partes = []
@@ -169,7 +180,7 @@ def _texto_linea(palabras, activo, est, karaoke=False, clave=""):
         if k == activo and not karaoke:
             es_clave = kclave and w.lower().strip(".,;:!?¡¿") == kclave
             pop = est.get("pop", 1.15) * (1.06 if es_clave else 1.0)
-            w = (f"{{\\c{c(est['clave'])}\\fscx{pop*100:.0f}\\fscy{pop*100:.0f}"
+            w = (f"{{\\c{c(est['clave'])}{glint}\\fscx{pop*100:.0f}\\fscy{pop*100:.0f}"
                  f"\\t(0,110,\\fscx100\\fscy100)}}{w}"
                  f"{{\\c{norm}\\fscx100\\fscy100}}")
         else:
@@ -257,6 +268,33 @@ def eventos_de(card, info, est, fs, max_car, margen=None):
         ev.append(_evento(card.inicio, card.fin,
                           f"{{\\fad({int(f/10)},{int(f/10)})}}"
                           + _texto_linea(ws, -1, est, clave=card.clave)))
+        return ev
+
+    if anim == "carta":
+        # Plateado de carta coleccionable. El ASS no tiene degradados, así que el metal
+        # se finge dibujando la MISMA línea tres veces: copia clara desplazada arriba
+        # (bisel), copia gris desplazada abajo (canto) y el plata encima. Los despla-
+        # zamientos van en \xshad/\yshad, NO en el Shadow del estilo: así cada copia
+        # conserva su contorno oscuro y el filo queda limpio.
+        bisel = est.get("bisel", 3)
+        arriba = {**est, "color": "#FFFFFF", "clave": "#FFFFFF"}
+        abajo = {**est, "color": "#6E7789", "clave": "#6E7789"}
+        for k, p in enumerate(ws):
+            inicio = p["a"]
+            fin = ws[k + 1]["a"] if k + 1 < len(ws) else card.fin
+            # el destello: entra en blanco puro y se asienta en un plata más claro
+            # (`color_activo`), no en el plata base: si no, a los 190 ms la palabra
+            # activa se confunde con las demás y el resalte no se ve.
+            destello = est.get("color_activo") or est["clave"]
+            glint = f"\\t(0,190,\\1c{c(destello)})"
+            texto = _texto_linea(ws, k, est, clave=card.clave, glint=glint)
+            # irisación: el contorno alterna carbón / violeta apagado palabra a palabra
+            iri = c("#3A3350" if k % 2 else est["color_contorno"])
+            texto = (f"{{\\3c{iri}\\frz{1.2 if k % 2 else -1.2}"
+                     f"\\t(0,110,\\frz0)}}{texto}")
+            ev.append(_evento(inicio, fin, f"{{\\xshad0\\yshad-{bisel}}}" + _texto_linea(ws, -1, arriba), capa=1))
+            ev.append(_evento(inicio, fin, f"{{\\xshad0\\yshad{bisel}}}" + _texto_linea(ws, -1, abajo), capa=0))
+            ev.append(_evento(inicio, fin, texto, capa=2))
         return ev
 
     # pop / glitch -> un evento por palabra (la palabra activa se resalta)

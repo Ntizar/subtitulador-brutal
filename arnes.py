@@ -133,7 +133,14 @@ def comprobar_render(cards, info, video, clave_estilo, carpeta):
           f"{meta['tamano']}px, máx {meta['max_caracteres']} car")
     salida = Path(carpeta) / "_arnes"
     salida.mkdir(exist_ok=True)
-    muestra = cards[:2] + cards[len(cards) // 2:len(cards) // 2 + 2] + cards[-2:]
+    # Sin repetir tarjeta: con 4 tarjetas o menos los tres tramos de abajo se solapan,
+    # el mismo fotograma se pide dos veces y el arnés acusaba «fotogramas repetidos
+    # -> el -ss está mal» sin que el -ss tuviera nada que ver.
+    muestra, vistos = [], set()
+    for c in cards[:2] + cards[len(cards) // 2:len(cards) // 2 + 2] + cards[-2:]:
+        if c.i not in vistos:
+            vistos.add(c.i)
+            muestra.append(c)
     pngs, hashes, valores = [], [], []
     for c in muestra:
         t = (c.inicio + c.fin) / 2

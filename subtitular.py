@@ -34,7 +34,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Subtitulador Brutal — subtítulos animados con la API de NaN",
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("video", nargs="?", help="vídeo de entrada")
-    ap.add_argument("-e", "--estilo", default="aurora7", help="estilo (ver --listar-estilos)")
+    ap.add_argument("-e", "--estilo", default="carta", help="estilo (ver --listar-estilos)")
     ap.add_argument("-p", "--posicion", default="bajo", choices=["bajo", "medio", "alto"])
     ap.add_argument("-o", "--salida", help="vídeo de salida (por defecto <nombre>.<estilo>.mp4)")
     ap.add_argument("--idioma", default=None, help="código de idioma (es, en…). Vacío = detectar")
@@ -43,6 +43,11 @@ def main(argv=None):
     ap.add_argument("--crf", type=int, default=20)
     ap.add_argument("--preset", default="veryfast")
     ap.add_argument("--hilos", type=int, default=5, help="peticiones de whisper en paralelo")
+    ap.add_argument("--modelo", default="qwen3.6",
+                    help="modelo de NaN para corregir y maquetar el texto (qwen3.6, qwen3.8-flash…)")
+    ap.add_argument("--plazo", type=float,
+                    help="segundos máximos para el paso de texto; si se pasa, ese lote va por reglas "
+                         "(por defecto: 40%% de la duración del vídeo)")
     ap.add_argument("--ruido", type=float, default=-32.0, help="dB del silencio (VAD)")
     ap.add_argument("--escala", type=float, help="tamaño de fuente (fracción de la altura)")
     ap.add_argument("--mayusculas", action="store_true", default=None)
@@ -116,25 +121,34 @@ def main(argv=None):
         log(f"2/5 transcribiendo con whisper ({len(trozos)} trozos, {a.hilos} en paralelo)")
         wh = Whisper(clave, hilos=a.hilos)
         sonda = None
-        if not a.idioma:
-            sonda = AUD.sonda_idioma(str(Path(tmp) / "audio.wav"), str(Path(tmp) / "sonda.mp3"),
-                                     segundos=min(25.0, max(8.0, info["duracion"])))
+        if not a.idioma and frases:
+            # La sonda (una llamada extra con hasta 25 s de audio) solo hace falta si
+            # NINGUNA frase llega a 1,5 s: entonces no hay trozo del que fiarse para
+            # detectar el idioma. Con una frase larga, ese trozo hace de sonda gratis.
+            if max(f.fin - f.inicio for f in frases) < 1.5:
+                sonda = AUD.sonda_idioma(str(Path(tmp) / "audio.wav"), str(Path(tmp) / "sonda.mp3"),
+                                         segundos=min(25.0, max(8.0, info["duracion"])))
         trozos = wh.transcribir(trozos, idioma=a.idioma, sonda=sonda,
                                 avisar=lambda m: log("    " + m))
         ok = [t for t in trozos if t.texto]
         log(f"    {len(ok)}/{len(trozos)} trozos con texto"
             + (f", idioma {ok[0].idioma}" if ok else ""))
 
-        # ---- 3) qwen3.6 corrige y maqueta
+        # ---- 3) el modelo corrige y maqueta
         maquetado = {}
         if not a.sin_llm and ok:
-            log("3/5 qwen3.6 corrigiendo erratas y partiendo en bloques")
+            # Plazo: el paso de texto es el único que depende de una API compartida y
+            # puede tardar de 5 a 20 s con el MISMO input. Con fecha límite, un lote
+            # lento se cae a las reglas (cobertura 1.0 por construcción) y el vídeo
+            # nunca tarda más de lo que dura.
+            plazo = a.plazo or max(20.0, min(240.0, info["duracion"] * 0.4))
+            log(f"3/5 {a.modelo} corrigiendo erratas y partiendo en bloques (plazo {plazo:.0f}s)")
             try:
-                q = LLM.Qwen(clave)
+                q = LLM.Qwen(clave, modelo=a.modelo, timeout=int(plazo))
                 maquetado = q.maquetar([{"i": t.i, "texto": t.texto} for t in ok],
                                        avisar=lambda m: log("    " + m))
             except Exception as e:
-                log(f"    qwen3.6 falló ({e}); sigo con el reparto por reglas")
+                log(f"    {a.modelo} falló ({e}); sigo con el reparto por reglas")
         else:
             log("3/5 sin LLM (reparto por reglas)")
 

@@ -79,20 +79,34 @@ class Whisper:
         """
         pendientes = list(trozos)
         if not idioma:
-            ref = sonda or (trozos[0].fichero if trozos else None)
+            # El idioma lo decide el trozo MÁS LARGO, no el primero: un trozo corto
+            # detecta mal el idioma (dice `en` con español) y preguntárselo a una
+            # sonda aparte cuesta una llamada entera —hasta 25 s de audio que se
+            # tiraban a la basura—: medido, 3,4 s de un vídeo de 16 s. Con el trozo
+            # largo se reutiliza su transcripción y no se paga nada extra.
+            ref_t = None
+            if sonda is None and trozos:
+                largo = max(trozos, key=lambda t: t.dur)
+                if largo.dur >= 1.5:
+                    ref_t = largo
+            ref = sonda or (ref_t.fichero if ref_t else (trozos[0].fichero if trozos else None))
             if not ref:
                 raise RuntimeError("no hay audio para detectar el idioma")
             r = self._peticion(ref, None, None)
             idioma = (r.get("language") or "es") if isinstance(r, dict) else "es"
             if avisar:
-                avisar(f"idioma detectado: {idioma}")
-            if sonda is None and trozos:          # la sonda era el primer trozo: reutilízala
-                trozos[0].texto = (r.get("text") or "").strip()
-                trozos[0].idioma = idioma
+                avisar(f"idioma detectado: {idioma}"
+                       + (" (trozo de %.1fs)" % ref_t.dur if ref_t else " (sonda)"))
+            if sonda is None and trozos:
+                # la referencia era un trozo nuestro: reaprovecha su transcripción
+                t0 = ref_t if ref_t is not None else trozos[0]
+                t0.texto = (r.get("text") or "").strip()
+                t0.idioma = idioma
                 segs = r.get("segments") or []
                 if segs:
-                    trozos[0].confianza = sum(s.get("avg_logprob", -1.0) for s in segs) / len(segs)
-                pendientes = trozos[1:] if trozos[0].texto else trozos
+                    t0.confianza = sum(s.get("avg_logprob", -1.0) for s in segs) / len(segs)
+                if t0.texto:
+                    pendientes = [t for t in trozos if t is not t0]
 
         # pasada en paralelo, sin prompt (el prompt impide paralelizar)
         with ThreadPoolExecutor(max_workers=self.hilos) as ex:

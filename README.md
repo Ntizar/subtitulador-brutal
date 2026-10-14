@@ -3,8 +3,8 @@
 Herramienta de línea de órdenes que **subtitula cualquier vídeo, del largo que sea**, con
 subtítulos animados palabra a palabra quemados dentro del fotograma. Usa la API de NaN
 (`whisper` para transcribir, `qwen3.6` para corregir y maquetar) y **libass** vía ffmpeg
-para el render final. Trae **8 estilos** y un previsualizador web para elegir sin gastar
-proceso.
+para el render final. Trae **9 estilos** —por defecto **Carta**, el plateado de carta
+coleccionable— y un previsualizador web para elegir sin gastar proceso.
 
 No es un envoltorio de otra herramienta: el motor es propio porque el servicio de
 transcripción tiene dos limitaciones medidas y comprobadas — **no devuelve tiempos por
@@ -38,7 +38,7 @@ un minuto.
 | El vídeo de prueba con voz sintética | `pruebas/hacer_video.sh` y `pruebas/voz_prueba.sh` |
 | La página que se publica | `index.html` |
 
-## Los 8 estilos
+## Los 9 estilos
 
 | Clave | Nombre | Qué hace |
 |---|---|---|
@@ -50,6 +50,7 @@ un minuto.
 | `editorial` | Editorial | Inter en caja negra translúcida, sin golpes: para vídeo serio |
 | `maquina` | Máquina de escribir | Space Grotesk que aparece palabra a palabra con cursor |
 | `vhs` | VHS | Archivo con temblor y separación de color rojo/cian |
+| `carta` | Carta | Plateado de carta coleccionable: bisel claro arriba, canto gris abajo, contorno iridiscente y fogonazo blanco en la palabra activa. **Es el estilo por defecto** |
 
 Las animaciones son ASS de verdad (`\t`, `\kf`, `\fad`, vectores con `\p1`), no plantillas
 de texto: el mismo fichero `.ass` sirve para quemar y para abrir en un editor.
@@ -60,7 +61,9 @@ La orden es `python3 subtitular.py <vídeo> [opciones]`. Lo que importa de la in
 
 | Opción | Para qué |
 |---|---|
-| `--estilo` | Cuál de los 8 estilos |
+| `--estilo` | Cuál de los 9 estilos (`carta` por defecto) |
+| `--modelo` | Qué modelo de NaN corrige y maqueta el texto (`qwen3.6` por defecto) |
+| `--plazo` | Segundos máximos para el paso de texto: si no vuelve a tiempo, ese lote va por reglas |
 | `--desde-json` | Reutiliza una transcripción ya hecha: cambia de estilo sin volver a llamar a la API |
 | `--rehacer` | Ignora la transcripción guardada y la vuelve a hacer |
 | `--solo-ass` | No recodifica: escribe `.ass`, `.srt` y `.json` |
@@ -127,9 +130,22 @@ tinta en la banda de subtítulos y que dos momentos distintos dan fotogramas dis
 la única forma de cazar que libass no encuentre una fuente o que el reloj del filtro se
 reinicie). `pruebas/arnes-navegador.html` hace lo mismo con la página en un navegador real.
 
-Cifras medidas en la máquina de desarrollo (1 vCPU, sin GPU): un vídeo 1080×1920 de 59 s
-tarda **38 s** en quemarse y sus 13 frases se transcriben en **9 s**; extrapolado, un vídeo
-de 10 minutos sale en unos **6,5 minutos**.
+Cifras medidas en la máquina de desarrollo (1 vCPU, sin GPU) con un vídeo de **16,6 s a
+848×496**: la herramienta entera tarda **8,4 s** (2× más rápido que el vídeo). El desglose:
+
+| Fase | Coste | Nota |
+|---|---|---|
+| VAD y corte del audio | 0,1 s | `silencedetect` |
+| whisper (5 hilos) | ~0,9 s | 12 hilos **empeora** (1,4 s) y puede encolar el paso de texto |
+| paso de texto | 0,5-18,5 s | lo más variable: es una API compartida |
+| quemado (x264 veryfast crf20) | 4,5 s | 1,6 MB · superfast 3,3 s/2,7 MB · ultrafast 2,7 s/5,2 MB |
+
+El idioma lo decide **el trozo de audio más largo**, no una sonda aparte: preguntarlo con una
+sonda costaba una llamada entera de hasta 25 s de audio (3,4 s de este vídeo) y esa
+transcripción se tiraba. Y al paso de texto se le pone **plazo** (`--plazo`, 40 % de la
+duración): el mismo texto tardó 4,7 s y 18,5 s en dos intentos seguidos con `qwen3.6`, así que
+si el lote no vuelve a tiempo se cae a las reglas y la herramienta nunca tarda más de lo que
+dura el vídeo.
 
 ## Detalles que cuestan tiempo si no se saben
 
